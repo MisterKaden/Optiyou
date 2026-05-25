@@ -20,7 +20,7 @@ Preferred CI path:
 3. The workflow typechecks, validates the Worker bundle, and runs `wrangler deploy` when the required Cloudflare secrets are present.
 4. Cloudflare publishes the Worker to `optiyou.co` and `www.optiyou.co`.
 
-The current repository already has `CLOUDFLARE_ACCOUNT_ID` set. Add `CLOUDFLARE_API_TOKEN` to turn on automatic deploys from GitHub.
+The current repository already has `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_ZONE_ID` set. Add `CLOUDFLAREOPTI_API_TOKEN` to turn on automatic deploys from GitHub.
 
 Native Cloudflare Workers Builds path:
 
@@ -49,8 +49,9 @@ CLOUDFLARE_API_TOKEN=... npm run cloudflare:bootstrap
 
 Add these repository secrets in GitHub:
 
-- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLAREOPTI_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_ZONE_ID`
 
 Use account ID:
 

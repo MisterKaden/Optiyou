@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  HAS_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+  HAS_CLOUDFLAREOPTI_API_TOKEN: ${{ secrets.CLOUDFLAREOPTI_API_TOKEN != '' }}
   HAS_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
 
 permissions:
@@ -42,15 +42,21 @@ jobs:
         run: npm run check
 
       - name: Cloudflare deploy skipped
-        if: env.HAS_CLOUDFLARE_API_TOKEN != 'true' || env.HAS_CLOUDFLARE_ACCOUNT_ID != 'true'
+        if: env.HAS_CLOUDFLAREOPTI_API_TOKEN != 'true' || env.HAS_CLOUDFLARE_ACCOUNT_ID != 'true'
         run: |
-          echo "::notice::Skipping Cloudflare deploy because CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is missing."
+          echo "::notice::Skipping Cloudflare deploy because CLOUDFLAREOPTI_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is missing."
 
       - name: Deploy
-        if: env.HAS_CLOUDFLARE_API_TOKEN == 'true' && env.HAS_CLOUDFLARE_ACCOUNT_ID == 'true'
+        if: env.HAS_CLOUDFLAREOPTI_API_TOKEN == 'true' && env.HAS_CLOUDFLARE_ACCOUNT_ID == 'true'
         uses: cloudflare/wrangler-action@v4
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          apiToken: ${{ secrets.CLOUDFLAREOPTI_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply DNS and zone baseline
+        if: env.HAS_CLOUDFLAREOPTI_API_TOKEN == 'true' && env.HAS_CLOUDFLARE_ACCOUNT_ID == 'true'
+        run: npm run cloudflare:bootstrap
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLAREOPTI_API_TOKEN }}
