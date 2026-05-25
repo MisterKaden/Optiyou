@@ -246,7 +246,12 @@ async function handleUpload(request: Request, env: Env, url: URL): Promise<Respo
     throw new HttpError(400, "upload_body_required", "Upload body is required.");
   }
 
-  await env.PRODUCT_ARTIFACTS.put(verified.objectKey, request.body, {
+  const artifactBucket = getArtifactBucket(env);
+  if (!artifactBucket) {
+    throw new HttpError(503, "artifact_storage_not_configured", "Product artifact storage is not enabled yet.");
+  }
+
+  await artifactBucket.put(verified.objectKey, request.body, {
     httpMetadata: {
       contentType: request.headers.get("content-type") ?? "application/octet-stream"
     },
@@ -263,6 +268,11 @@ async function handleUpload(request: Request, env: Env, url: URL): Promise<Respo
     objectKey: verified.objectKey,
     contributionId: verified.contributionId
   });
+}
+
+function getArtifactBucket(env: Env): R2Bucket | null {
+  const maybeEnv = env as unknown as { PRODUCT_ARTIFACTS?: R2Bucket };
+  return maybeEnv.PRODUCT_ARTIFACTS ?? null;
 }
 
 async function handleAsk(request: Request, env: Env): Promise<Response> {
@@ -400,11 +410,21 @@ async function scanCacheKey(gtin: string, profile: PersonalizationProfile): Prom
 }
 
 async function writeScanAnalytics(env: Env, event: ProductAnalytics): Promise<void> {
-  env.SCAN_ANALYTICS.writeDataPoint({
+  const analytics = getScanAnalytics(env);
+  if (!analytics) {
+    return;
+  }
+
+  analytics.writeDataPoint({
     blobs: [event.outcome, event.gtin],
     doubles: [event.optiScore ?? -1, event.optiFit ?? -1],
     indexes: [event.userId]
   });
+}
+
+function getScanAnalytics(env: Env): AnalyticsEngineDataset | null {
+  const maybeEnv = env as unknown as { SCAN_ANALYTICS?: AnalyticsEngineDataset };
+  return maybeEnv.SCAN_ANALYTICS ?? null;
 }
 
 function explanationFromReasonCodes(product: FoodProduct) {
