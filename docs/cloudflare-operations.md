@@ -96,6 +96,8 @@ Worker routes in `wrangler.jsonc` should own web traffic for both hosts.
 - `/_health` returns a no-cache health payload.
 - `/_version` returns deployment metadata.
 - `www.optiyou.co/*` redirects to `optiyou.co/*`.
+- `GET /v1/auth/apple/nonce` returns a one-use Sign in with Apple nonce for the iOS client.
+- `POST /v1/auth/apple` verifies the Apple identity token, creates or updates the Optiyou user, and returns a short-lived Optiyou bearer access token.
 - `POST /v1/scan` returns an instant product card for known GTINs or a missing-product contribution intent.
 - `GET /v1/methodology` returns the deterministic packaged-food scoring scope and trust rules.
 - `PUT /v1/uploads/:token` stores signed contribution uploads in R2 through the Worker.
@@ -125,10 +127,15 @@ Required Worker secrets:
 - `ADMIN_API_TOKEN`
 - `AUTH_JWT_SECRET`
 
-Optional auth claim checks:
+Production auth vars in `wrangler.jsonc`:
 
+- `APPLE_CLIENT_ID`
 - `AUTH_JWT_ISSUER`
 - `AUTH_JWT_AUDIENCE`
+- `AUTH_SESSION_TTL_SECONDS`
+- `AUTH_APPLE_NONCE_TTL_SECONDS`
+
+Protected iOS endpoints accept only Optiyou-issued access tokens returned by `POST /v1/auth/apple`. Raw Apple identity tokens, anonymous install IDs, and static app bearer tokens are rejected.
 
 For local development, copy `.dev.vars.example` to `.dev.vars` and replace the placeholders. `.dev.vars` is ignored by Git.
 

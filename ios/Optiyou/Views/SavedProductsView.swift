@@ -5,7 +5,7 @@ struct SavedProductsView: View {
     var openProduct: (Product) -> Void
 
     private var savedProducts: [Product] {
-        SampleCatalog.products.filter { store.savedProductIDs.contains($0.id) }
+        store.history.map(\.product).filter { store.savedProductIDs.contains($0.id) }
     }
 
     var body: some View {
@@ -23,12 +23,11 @@ struct SavedProductsView: View {
                     )
                 } else {
                     ForEach(savedProducts) { product in
-                        let score = ScoringEngine().score(product: product, profile: store.profile)
                         Button {
                             openProduct(product)
                         } label: {
                             SectionCard {
-                                ProductRow(product: product, score: score)
+                                ProductRow(product: product, score: product.score(profile: store.profile))
                             }
                         }
                         .buttonStyle(.plain)

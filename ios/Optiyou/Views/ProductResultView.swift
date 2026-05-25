@@ -7,11 +7,11 @@ struct ProductResultView: View {
     @State private var showsIssueReport = false
 
     private var result: ScoreResult {
-        ScoringEngine().score(product: product, profile: store.profile)
+        product.score(profile: store.profile)
     }
 
     private var explanation: AIExplanation {
-        ExplanationComposer().compose(product: product, result: result, profile: store.profile)
+        product.serverExplanation ?? ExplanationComposer().compose(product: product, result: result, profile: store.profile)
     }
 
     var body: some View {
@@ -225,17 +225,33 @@ struct ProductResultView: View {
 
     private var swapsCard: some View {
         ResultDisclosureCard(title: "Better Swaps", systemImage: "arrow.triangle.2.circlepath") {
-            let swaps = SampleCatalog.betterSwaps(for: product, profile: store.profile)
+            let swaps = product.serverAlternatives
             if swaps.isEmpty {
-                Text("No higher-scoring same-category swap is available in the local sample catalog.")
+                Text("No higher-scoring same-category swap is available from the live catalog yet.")
                     .font(.footnote)
                     .foregroundStyle(Color.optiMuted)
             } else {
                 ForEach(swaps) { swap in
-                    let swapResult = ScoringEngine().score(product: swap, profile: store.profile)
                     VStack(alignment: .leading, spacing: 8) {
-                        ProductRow(product: swap, score: swapResult)
-                        ForEach(SampleCatalog.swapReasons(from: product, to: swap, profile: store.profile), id: \.self) { reason in
+                        HStack(spacing: 12) {
+                            Image(systemName: "arrow.up.forward.circle")
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(Color.optiGreen)
+                                .frame(width: 40, height: 40)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(swap.name)
+                                    .font(.headline)
+                                    .foregroundStyle(Color.optiInk)
+                                Text(swap.brand)
+                                    .font(.subheadline)
+                                    .foregroundStyle(Color.optiMuted)
+                            }
+                            Spacer()
+                            Text("\(swap.optiFit)")
+                                .font(.title3.weight(.black))
+                                .foregroundStyle(ScoreStatus(value: swap.optiFit).color)
+                        }
+                        ForEach(swap.whyBetter, id: \.self) { reason in
                             Label(reason, systemImage: "checkmark.circle")
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(Color.optiMuted)

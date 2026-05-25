@@ -4,9 +4,12 @@ import type {
   FoodProduct,
   Ingredient,
   IngredientFlag,
+  IngestionQueueMessage,
   PersonalizationProfile,
   ProductCategory,
-  ProcessingLevel
+  ProcessingLevel,
+  ScanSource,
+  UploadKind
 } from "./types.ts";
 import type { AuthenticatedUser } from "./auth.ts";
 import { HttpError } from "../http/responses.ts";
@@ -55,6 +58,88 @@ interface ProfileRow {
   avoided_ingredients_json: string;
 }
 
+export interface ScanHistoryEntry {
+  id: string;
+  gtin: string;
+  source: ScanSource;
+  resultStatus: string;
+  optiScore?: number;
+  optiFit?: number;
+  createdAt: string;
+  product?: FoodProduct;
+}
+
+interface ScanHistoryRow {
+  id: string;
+  gtin: string;
+  scan_source: string;
+  result_status: string;
+  opti_score: number | null;
+  opti_fit: number | null;
+  created_at: string;
+}
+
+interface ContributionProductRow {
+  contribution_id: string;
+  product_id: string;
+  gtin: string;
+  status: string;
+}
+
+interface ContributionReviewQueueRow {
+  id: string;
+  product_id: string;
+  gtin: string;
+  status: string;
+  uploads_received: number;
+  total_uploads: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ContributionUploadRow {
+  kind: UploadKind;
+  r2_key: string;
+  status: "awaiting_upload" | "uploaded";
+  uploaded_at: string | null;
+}
+
+export interface ContributionUploadReceipt {
+  contributionId: string;
+  productId: string;
+  gtin: string;
+  status: string;
+  readyForReview: boolean;
+  uploads: Array<{
+    kind: UploadKind;
+    r2Key: string;
+    status: "awaiting_upload" | "uploaded";
+    uploadedAt?: string;
+  }>;
+  queueMessage?: IngestionQueueMessage;
+}
+
+export interface ContributionReviewQueueItem {
+  id: string;
+  productId: string;
+  gtin: string;
+  status: string;
+  uploadsReceived: number;
+  totalUploads: number;
+  createdAt: string;
+  updatedAt: string;
+  uploads: Array<{
+    kind: UploadKind;
+    r2Key: string;
+    status: "awaiting_upload" | "uploaded";
+    uploadedAt?: string;
+  }>;
+}
+
+export type ContributionReviewDecision = "needs_review" | "approved" | "rejected";
+
+const REQUIRED_UPLOAD_KINDS: UploadKind[] = ["front_package", "nutrition_label", "ingredients_label"];
+
 export async function findProductByGtin(env: Env, gtin: string): Promise<FoodProduct | null> {
   const row = await env.DB.prepare(`
     SELECT
@@ -89,6 +174,87 @@ export async function findProductByGtin(env: Env, gtin: string): Promise<FoodPro
   }
 
   return loadProductFromRow(env, row);
+}
+
+export async function searchProducts(env: Env, query: string, limit = 20): Promise<FoodProduct[]> {
+  const term = query.trim();
+  if (!term) {
+    return [];
+  }
+
+  const safeLimit = Math.min(Math.max(limit, 1), 50);
+  const likeTerm = `%${term}%`;
+  const exactGtin = term.replace(/\D/g, "");
+  const rows = await env.DB.prepare(`
+    SELECT
+      p.id AS product_id,
+      p.gtin,
+      p.market,
+      p.category,
+      pv.id AS version_id,
+      pv.version_number,
+      pv.name,
+      pv.brand,
+      pv.image_r2_key,
+      p.verification_status,
+      p.brand_confirmation,
+      p.user_contribution_count,
+      p.conflict_flags_json,
+      p.last_seen_at,
+      pv.source_summary,
+      COALESCE((
+        SELECT AVG(confidence)
+        FROM product_field_sources pfs
+        WHERE pfs.product_version_id = pv.id
+      ), 0.58) AS data_confidence
+    FROM products p
+    JOIN product_versions pv ON pv.id = p.current_version_id
+    WHERE p.gtin LIKE ? OR pv.name LIKE ? OR pv.brand LIKE ? OR p.category LIKE ?
+    ORDER BY
+      CASE
+        WHEN p.gtin = ? THEN 0
+        WHEN pv.name LIKE ? THEN 1
+        WHEN pv.brand LIKE ? THEN 2
+        ELSE 3
+      END,
+      p.last_seen_at DESC
+    LIMIT ${safeLimit}
+  `).bind(likeTerm, likeTerm, likeTerm, likeTerm, exactGtin, likeTerm, likeTerm).all<ProductRow>();
+
+  const products: FoodProduct[] = [];
+  for (const row of rows.results) {
+    products.push(await loadProductFromRow(env, row));
+  }
+
+  return products;
+}
+
+export async function listScanHistory(env: Env, userId: string, limit = 50): Promise<ScanHistoryEntry[]> {
+  const safeLimit = Math.min(Math.max(limit, 1), 100);
+  const rows = await env.DB.prepare(`
+    SELECT id, gtin, scan_source, result_status, opti_score, opti_fit, created_at
+    FROM scan_history
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT ${safeLimit}
+  `).bind(userId).all<ScanHistoryRow>();
+
+  const entries: ScanHistoryEntry[] = [];
+  for (const row of rows.results) {
+    const product = row.result_status === "known" ? await findProductByGtin(env, row.gtin) : null;
+    entries.push({
+      id: row.id,
+      gtin: row.gtin,
+      source: scanSourceFromDatabase(row.scan_source),
+      resultStatus: row.result_status,
+      optiScore: row.opti_score ?? undefined,
+      optiFit: row.opti_fit ?? undefined,
+      createdAt: row.created_at,
+      product: product ?? undefined
+    });
+  }
+
+  return entries;
 }
 
 export async function loadProfile(env: Env, userId: string, profileId?: string): Promise<PersonalizationProfile> {
@@ -204,12 +370,145 @@ export async function createContributionShell(
   ]);
 }
 
-export async function markUploadReceived(env: Env, contributionId: string, objectKey: string): Promise<void> {
+export async function markUploadReceived(
+  env: Env,
+  contributionId: string,
+  objectKey: string
+): Promise<ContributionUploadReceipt> {
   await env.DB.prepare(`
     UPDATE contribution_uploads
     SET status = 'uploaded', uploaded_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
     WHERE contribution_id = ? AND r2_key = ?
   `).bind(contributionId, objectKey).run();
+
+  const contribution = await loadContributionProduct(env, contributionId);
+
+  if (!contribution) {
+    throw new HttpError(404, "contribution_not_found", "Contribution was not found for this upload.");
+  }
+
+  const uploads = await listContributionUploads(env, contributionId);
+  const uploadedKinds = new Set(
+    uploads
+      .filter((upload) => upload.status === "uploaded")
+      .map((upload) => upload.kind)
+  );
+  const readyForReview = REQUIRED_UPLOAD_KINDS.every((kind) => uploadedKinds.has(kind));
+  const transitionedToReview = readyForReview ? await markContributionReadyForReview(env, contributionId) : false;
+  const latestContribution = transitionedToReview ? {
+    ...contribution,
+    status: "needs_review"
+  } : readyForReview ? await loadContributionProduct(env, contributionId) ?? contribution : contribution;
+
+  if (!transitionedToReview && readyForReview && latestContribution.status === "awaiting_uploads") {
+    throw new HttpError(409, "contribution_review_transition_failed", "Contribution upload status could not be finalized.");
+  }
+
+  return {
+    contributionId,
+    productId: contribution.product_id,
+    gtin: contribution.gtin,
+    status: latestContribution.status,
+    readyForReview,
+    uploads,
+    queueMessage: transitionedToReview ? {
+      type: "ingest_missing_product",
+      productId: contribution.product_id,
+      contributionId,
+      gtin: contribution.gtin,
+      market: "US_CA",
+      uploadKeys: uploadKeysFromRows(uploads)
+    } : undefined
+  };
+}
+
+async function markContributionReadyForReview(env: Env, contributionId: string): Promise<boolean> {
+  const result = await env.DB.prepare(`
+      UPDATE contributions
+      SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE id = ?
+        AND status NOT IN ('needs_review', 'approved', 'rejected')
+    `).bind("needs_review", contributionId).run();
+
+  return d1ResultChangedRows(result);
+}
+
+export async function listContributionReviewQueue(env: Env): Promise<ContributionReviewQueueItem[]> {
+  const rows = await env.DB.prepare(`
+    SELECT
+      c.id,
+      c.product_id,
+      p.gtin,
+      c.status,
+      SUM(CASE WHEN cu.status = 'uploaded' THEN 1 ELSE 0 END) AS uploads_received,
+      COUNT(cu.id) AS total_uploads,
+      c.created_at,
+      c.updated_at
+    FROM contributions c
+    JOIN products p ON p.id = c.product_id
+    LEFT JOIN contribution_uploads cu ON cu.contribution_id = c.id
+    WHERE c.status IN ('awaiting_uploads', 'uploaded', 'needs_review')
+    GROUP BY c.id, c.product_id, p.gtin, c.status, c.created_at, c.updated_at
+    ORDER BY c.updated_at DESC, c.created_at DESC
+    LIMIT 50
+  `).all<ContributionReviewQueueRow>();
+
+  const queue: ContributionReviewQueueItem[] = [];
+  for (const row of rows.results) {
+    queue.push({
+      id: row.id,
+      productId: row.product_id,
+      gtin: row.gtin,
+      status: row.status,
+      uploadsReceived: row.uploads_received,
+      totalUploads: row.total_uploads,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      uploads: await listContributionUploads(env, row.id)
+    });
+  }
+
+  return queue;
+}
+
+export async function reviewContribution(
+  env: Env,
+  input: {
+    contributionId: string;
+    status: ContributionReviewDecision;
+    notes?: string;
+    actorId: string;
+  }
+): Promise<{ id: string; status: ContributionReviewDecision }> {
+  const contribution = await loadContributionProduct(env, input.contributionId);
+  if (!contribution) {
+    throw new HttpError(404, "contribution_not_found", "Contribution was not found.");
+  }
+
+  const notes = input.notes?.trim().slice(0, 2000);
+  await env.DB.batch([
+    env.DB.prepare(`
+      UPDATE contributions
+      SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE id = ?
+    `).bind(input.status, input.contributionId),
+    env.DB.prepare(`
+      INSERT INTO correction_reviews (id, product_id, contribution_id, status, reviewer_user_id, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(`review_${crypto.randomUUID()}`, contribution.product_id, input.contributionId, input.status, null, notes ?? null),
+    env.DB.prepare(`
+      INSERT INTO audit_log (id, actor_id, action, entity_type, entity_id, before_json, after_json)
+      VALUES (?, ?, 'review_contribution', 'contribution', ?, ?, ?)
+    `).bind(
+      `audit_${crypto.randomUUID()}`,
+      input.actorId,
+      input.contributionId,
+      JSON.stringify({ status: contribution.status }),
+      JSON.stringify({ status: input.status, notes: notes || undefined })
+    )
+  ]);
+
+  return { id: input.contributionId, status: input.status };
 }
 
 export async function recordScan(
@@ -334,4 +633,88 @@ function processingFromIngredients(ingredients: IngredientRow[]): ProcessingLeve
     return "high";
   }
   return ingredients.length <= 4 ? "minimal" : "moderate";
+}
+
+function scanSourceFromDatabase(value: string): ScanSource {
+  switch (value) {
+    case "manual_search":
+      return "manual_search";
+    case "nutrition_photo":
+      return "nutrition_photo";
+    case "ingredients_photo":
+      return "ingredients_photo";
+    default:
+      return "barcode";
+  }
+}
+
+async function loadContributionProduct(env: Env, contributionId: string): Promise<ContributionProductRow | null> {
+  return env.DB.prepare(`
+    SELECT c.id AS contribution_id, c.product_id, p.gtin, c.status
+    FROM contributions c
+    JOIN products p ON p.id = c.product_id
+    WHERE c.id = ?
+    LIMIT 1
+  `).bind(contributionId).first<ContributionProductRow>();
+}
+
+async function listContributionUploads(
+  env: Env,
+  contributionId: string
+): Promise<ContributionUploadReceipt["uploads"]> {
+  const rows = await env.DB.prepare(`
+    SELECT kind, r2_key, status, uploaded_at
+    FROM contribution_uploads
+    WHERE contribution_id = ?
+    ORDER BY CASE kind
+      WHEN 'front_package' THEN 1
+      WHEN 'nutrition_label' THEN 2
+      WHEN 'ingredients_label' THEN 3
+      ELSE 4
+    END
+  `).bind(contributionId).all<ContributionUploadRow>();
+
+  return rows.results.map((row) => ({
+    kind: row.kind,
+    r2Key: row.r2_key,
+    status: row.status,
+    uploadedAt: row.uploaded_at ?? undefined
+  }));
+}
+
+function uploadKeysFromRows(
+  uploads: Array<{ kind: UploadKind; r2Key: string }>
+): Record<UploadKind, string> {
+  const keys = Object.fromEntries(uploads.map((upload) => [upload.kind, upload.r2Key])) as Partial<Record<UploadKind, string>>;
+
+  for (const kind of REQUIRED_UPLOAD_KINDS) {
+    if (!keys[kind]) {
+      throw new Error(`Contribution is missing required upload key for ${kind}.`);
+    }
+  }
+
+  return keys as Record<UploadKind, string>;
+}
+
+function d1ResultChangedRows(result: unknown): boolean {
+  if (!result || typeof result !== "object") {
+    return false;
+  }
+
+  const meta = Reflect.get(result, "meta");
+  if (!meta || typeof meta !== "object") {
+    return false;
+  }
+
+  const changes = Reflect.get(meta, "changes");
+  if (typeof changes === "number") {
+    return changes > 0;
+  }
+
+  const rowsWritten = Reflect.get(meta, "rows_written");
+  if (typeof rowsWritten === "number") {
+    return rowsWritten > 0;
+  }
+
+  return Reflect.get(meta, "changed_db") === true;
 }

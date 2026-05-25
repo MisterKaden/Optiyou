@@ -23,6 +23,9 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSCameraUsageDescription: "Optiyou uses the camera to scan food labels and barcodes."
+        NSPhotoLibraryUsageDescription: "Optiyou can use selected label photos for missing product contributions."
+        OPTIYOU_API_BASE_URL: "$(OPTIYOU_API_BASE_URL)"
+        OPTIYOU_API_ACCESS_TOKEN: "$(OPTIYOU_API_ACCESS_TOKEN)"
         UILaunchScreen:
           UIColorName: ""
         UISupportedInterfaceOrientations:

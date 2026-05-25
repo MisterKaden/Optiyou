@@ -5,10 +5,11 @@ struct SearchView: View {
     var openSheet: (AppSheet) -> Void
     var openProduct: (Product) -> Void
     @State private var query = ""
-
-    private var results: [Product] {
-        store.searchProducts(query: query)
-    }
+    @State private var results: [Product] = []
+    @State private var isSearching = false
+    @State private var loadingProductID: Product.ID?
+    @State private var errorMessage: String?
+    @State private var contributionDraft: ContributionDraft?
 
     var body: some View {
         ScrollView {
@@ -29,25 +30,42 @@ struct SearchView: View {
                 .background(Color.optiLine.opacity(0.48))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                if query.isEmpty {
+                if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     SearchPremiumCard(openSheet: openSheet)
+                } else if isSearching {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 36)
+                } else if let errorMessage {
+                    EmptyStateView(
+                        systemImage: "wifi.exclamationmark",
+                        title: "Search unavailable",
+                        message: errorMessage
+                    )
                 } else if results.isEmpty {
                     EmptyStateView(
                         systemImage: "magnifyingglass",
-                        title: "No local match",
-                        message: "Basic food search is free. Backend semantic search will expand this beyond the sample catalog."
+                        title: "No product match",
+                        message: "Try the barcode digits, brand, or product name."
                     )
                 } else {
                     SectionCard {
                         VStack(spacing: 0) {
                             ForEach(results) { product in
-                                let score = ScoringEngine().score(product: product, profile: store.profile)
                                 Button {
-                                    openProduct(product)
+                                    Task {
+                                        await openSearchResult(product)
+                                    }
                                 } label: {
-                                    ProductListRow(product: product, score: score, subtitle: product.category.title)
-                                        .padding(.vertical, 10)
+                                    ZStack(alignment: .trailing) {
+                                        ProductListRow(product: product, score: product.score(profile: store.profile), subtitle: product.category.title)
+                                            .padding(.vertical, 10)
+                                        if loadingProductID == product.id {
+                                            ProgressView()
+                                        }
+                                    }
                                 }
+                                .disabled(loadingProductID != nil)
                                 .buttonStyle(.plain)
 
                                 if product.id != results.last?.id {
@@ -66,6 +84,61 @@ struct SearchView: View {
         .toolbar {
             AppInfoToolbar(openSheet: openSheet)
         }
+        .task(id: query) {
+            await refreshSearch()
+        }
+        .sheet(item: $contributionDraft) { draft in
+            ContributionDraftSheet(draft: draft)
+        }
+    }
+
+    private func refreshSearch() async {
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard term.isEmpty == false else {
+            results = []
+            errorMessage = nil
+            isSearching = false
+            return
+        }
+
+        isSearching = true
+        errorMessage = nil
+        try? await Task.sleep(for: .milliseconds(250))
+        guard Task.isCancelled == false else {
+            return
+        }
+
+        do {
+            results = try await store.searchProducts(query: term)
+        } catch {
+            results = []
+            errorMessage = userFacingMessage(for: error)
+        }
+
+        isSearching = false
+    }
+
+    private func openSearchResult(_ product: Product) async {
+        loadingProductID = product.id
+        let outcome = await store.lookupProduct(gtin: product.barcode, source: .manualSearch)
+        loadingProductID = nil
+
+        switch outcome {
+        case let .product(product):
+            openProduct(product)
+        case let .contribution(draft):
+            contributionDraft = draft
+        case let .failure(message):
+            errorMessage = message
+        }
+    }
+
+    private func userFacingMessage(for error: Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+        return "Optiyou could not reach product search."
     }
 }
 

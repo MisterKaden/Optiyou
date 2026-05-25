@@ -19,6 +19,7 @@ struct AppRootView: View {
 }
 
 private struct MainTabView: View {
+    @EnvironmentObject private var store: AppStore
     @State private var selectedTab: AppTab = .scan
     @State private var activeSheet: AppSheet?
 
@@ -50,6 +51,9 @@ private struct MainTabView: View {
                 sheet.destination
             }
         }
+        .task {
+            await store.loadHistoryIfNeeded()
+        }
     }
 
     private func showSheet(_ sheet: AppSheet) {
@@ -58,14 +62,12 @@ private struct MainTabView: View {
 }
 
 private struct ScannerTab: View {
-    @EnvironmentObject private var store: AppStore
     var openSheet: (AppSheet) -> Void
     @State private var path: [Product] = []
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScannerView(openSheet: openSheet) { product, source in
-                store.recordScan(product, source: source)
+            ScannerView(openSheet: openSheet) { product, _ in
                 path.append(product)
             }
             .withProductDestinations()

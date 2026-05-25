@@ -87,6 +87,15 @@
         padding: 0 14px;
       }
 
+      button.secondary {
+        background: #e7efed;
+        color: var(--ink);
+      }
+
+      button.danger {
+        background: var(--danger);
+      }
+
       .row {
         display: grid;
         grid-template-columns: 1fr auto;
@@ -96,6 +105,32 @@
       .item {
         border-top: 1px solid var(--line);
         padding: 12px 0;
+      }
+
+      .meta,
+      .uploads {
+        display: grid;
+        gap: 6px;
+        margin: 8px 0 0;
+      }
+
+      .meta {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .uploads {
+        font-size: 0.88rem;
+      }
+
+      .upload {
+        overflow-wrap: anywhere;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
       }
 
       .status {
@@ -147,14 +182,28 @@
         sessionStorage.setItem("optiyouAdminToken", token);
       }
 
-      async function api(path) {
+      async function api(path, options = {}) {
         const response = await fetch(path, {
-          headers: { "x-optiyou-admin-token": token }
+          method: options.method || "GET",
+          headers: {
+            "x-optiyou-admin-token": token,
+            ...(options.body ? { "content-type": "application/json" } : {})
+          },
+          body: options.body ? JSON.stringify(options.body) : undefined
         });
         return response.json();
       }
 
-      function render(target, rows, empty) {
+      function text(tagName, content, className) {
+        const element = document.createElement(tagName);
+        element.textContent = content;
+        if (className) {
+          element.className = className;
+        }
+        return element;
+      }
+
+      function renderProducts(target, rows, empty) {
         target.replaceChildren();
         if (!rows.length) {
           const emptyState = document.createElement("p");
@@ -176,16 +225,79 @@
         }
       }
 
+      function renderQueue(rows) {
+        const target = document.getElementById("queue");
+        target.replaceChildren();
+        if (!rows.length) {
+          target.append(text("p", "Nothing pending review."));
+          return;
+        }
+
+        for (const row of rows) {
+          const item = document.createElement("div");
+          const title = text("strong", row.gtin || row.id || "Unknown contribution");
+          const meta = document.createElement("div");
+          const uploads = document.createElement("div");
+          const actions = document.createElement("div");
+
+          item.className = "item";
+          meta.className = "meta";
+          uploads.className = "uploads";
+          actions.className = "actions";
+
+          meta.append(
+            text("span", `Status: ${row.status || "unknown"}`),
+            text("span", `Uploads: ${row.uploadsReceived || 0}/${row.totalUploads || 0}`)
+          );
+
+          for (const upload of row.uploads || []) {
+            uploads.append(text("div", `${upload.kind}: ${upload.status} · ${upload.r2Key}`, "upload"));
+          }
+
+          actions.append(
+            decisionButton(row.id, "approved", "Approve"),
+            decisionButton(row.id, "rejected", "Reject", "danger"),
+            decisionButton(row.id, "needs_review", "Needs review", "secondary")
+          );
+
+          item.append(title, meta, uploads, actions);
+          target.append(item);
+        }
+      }
+
+      function decisionButton(id, status, label, className) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        if (className) {
+          button.className = className;
+        }
+        button.addEventListener("click", async () => {
+          await api(`/v1/admin/contributions/${encodeURIComponent(id)}`, {
+            method: "PATCH",
+            body: { status }
+          });
+          await loadQueue();
+        });
+        return button;
+      }
+
+      async function loadQueue() {
+        const data = await api("/v1/admin/review-queue");
+        renderQueue(data.queue || []);
+      }
+
       document.getElementById("search").addEventListener("click", async () => {
         const query = encodeURIComponent(document.getElementById("query").value);
         const data = await api(`/v1/admin/products?query=${query}`);
-        render(document.getElementById("products"), data.products || [], "No products found.");
+        renderProducts(document.getElementById("products"), data.products || [], "No products found.");
       });
 
       document.getElementById("refresh").addEventListener("click", async () => {
-        const data = await api("/v1/admin/review-queue");
-        render(document.getElementById("queue"), data.queue || [], "Nothing pending review.");
+        await loadQueue();
       });
+
+      loadQueue();
     </script>
   </body>
 </html>

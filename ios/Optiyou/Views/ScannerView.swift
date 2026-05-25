@@ -1,6 +1,7 @@
 import AVFoundation
 import AudioToolbox
 import SwiftUI
+import UIKit
 import Vision
 import VisionKit
 
@@ -112,11 +113,11 @@ struct ScannerView: View {
                 fallbackButton("Search", systemImage: "magnifyingglass") {
                     showsManualSearch = true
                 }
-                fallbackButton("Nutrition", systemImage: "tablecells") {
-                    openProduct(SampleCatalog.products[4], .nutritionPhoto)
+                fallbackButton("Photos", systemImage: "camera.viewfinder") {
+                    openSheet(.contribute)
                 }
-                fallbackButton("Ingredients", systemImage: "text.viewfinder") {
-                    openProduct(SampleCatalog.products[3], .ingredientsPhoto)
+                fallbackButton("Help", systemImage: "questionmark.circle") {
+                    openSheet(.help)
                 }
             }
 
@@ -176,7 +177,7 @@ struct ScannerView: View {
 
     private func processScan(_ result: BarcodeScanResult) async {
         sessionState = .processing(result.normalizedGTIN)
-        let outcome = await store.scanBarcode(result.normalizedGTIN)
+        let outcome = await store.lookupProduct(gtin: result.normalizedGTIN, source: .barcode)
 
         switch outcome {
         case let .product(product):
@@ -185,6 +186,8 @@ struct ScannerView: View {
         case let .contribution(draft):
             sessionState = .unknownProduct(result.normalizedGTIN)
             contributionDraft = draft
+        case let .failure(message):
+            sessionState = .failed(message)
         }
 
         try? await Task.sleep(for: .seconds(1.2))
@@ -297,9 +300,15 @@ private struct BarcodeDataScannerView: UIViewControllerRepresentable {
     }
 }
 
-private struct ContributionDraftSheet: View {
+struct ContributionDraftSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: AppStore
     var draft: ContributionDraft
+
+    @State private var captureKind: ContributionDraft.PhotoKind?
+    @State private var uploadingKinds: Set<ContributionDraft.PhotoKind> = []
+    @State private var uploadedKinds: Set<ContributionDraft.PhotoKind> = []
+    @State private var uploadErrorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -315,13 +324,26 @@ private struct ContributionDraftSheet: View {
                     VStack(alignment: .leading, spacing: 14) {
                         StatusBadge(title: draft.confidenceLabel, systemImage: "scope", color: .optiAmber)
                         ForEach(draft.requiredPhotos) { photo in
-                            Label(photo.title, systemImage: photo.systemImage)
-                                .font(.headline.weight(.bold))
+                            photoRow(photo)
                         }
                     }
                 }
 
-                Text("AI can extract the label, but Optiyou marks the result as estimated until data quality improves.")
+                if let uploadErrorMessage {
+                    Text(uploadErrorMessage)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.red)
+                } else if allPhotosUploaded {
+                    Text("All photos uploaded. This contribution is ready for review.")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.optiGreen)
+                } else {
+                    Text("AI can extract the label, but Optiyou marks the result as estimated until data quality improves.")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.optiMuted)
+                }
+
+                Text("Contribution \(draft.id)")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.optiMuted)
 
@@ -338,6 +360,119 @@ private struct ContributionDraftSheet: View {
                     }
                 }
             }
+        }
+        .sheet(item: $captureKind) { kind in
+            ImageCapturePicker(sourceType: imageSourceType) { image in
+                Task {
+                    await upload(image: image, for: kind)
+                }
+            }
+        }
+    }
+
+    private var allPhotosUploaded: Bool {
+        Set(draft.requiredPhotos).isSubset(of: uploadedKinds)
+    }
+
+    private var imageSourceType: UIImagePickerController.SourceType {
+        UIImagePickerController.isSourceTypeAvailable(.camera) ? .camera : .photoLibrary
+    }
+
+    private func photoRow(_ photo: ContributionDraft.PhotoKind) -> some View {
+        HStack(spacing: 12) {
+            Label(photo.title, systemImage: photo.systemImage)
+                .font(.headline.weight(.bold))
+            Spacer()
+            if uploadedKinds.contains(photo) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(Color.optiGreen)
+            } else if uploadingKinds.contains(photo) {
+                ProgressView()
+            } else {
+                Button("Capture") {
+                    captureKind = photo
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.optiGreen)
+                .disabled(draft.upload(for: photo)?.url == nil)
+            }
+        }
+    }
+
+    @MainActor
+    private func upload(image: UIImage, for kind: ContributionDraft.PhotoKind) async {
+        guard let data = image.jpegData(compressionQuality: 0.82) else {
+            uploadErrorMessage = "Optiyou could not prepare this photo."
+            return
+        }
+
+        uploadingKinds.insert(kind)
+        uploadErrorMessage = nil
+        defer {
+            uploadingKinds.remove(kind)
+        }
+
+        do {
+            try await store.uploadContributionPhoto(draft: draft, kind: kind, imageData: data)
+            uploadedKinds.insert(kind)
+        } catch {
+            uploadErrorMessage = userFacingMessage(for: error)
+        }
+    }
+
+    private func userFacingMessage(for error: Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+        return "Optiyou could not upload this photo. Try again."
+    }
+}
+
+private struct ImageCapturePicker: UIViewControllerRepresentable {
+    @Environment(\.dismiss) private var dismiss
+    var sourceType: UIImagePickerController.SourceType
+    var onImage: (UIImage) -> Void
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = sourceType
+        picker.delegate = context.coordinator
+        picker.allowsEditing = false
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onImage: onImage) {
+            dismiss()
+        }
+    }
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        var onImage: (UIImage) -> Void
+        var onDismiss: () -> Void
+
+        init(onImage: @escaping (UIImage) -> Void, onDismiss: @escaping () -> Void) {
+            self.onImage = onImage
+            self.onDismiss = onDismiss
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            if let image = info[.originalImage] as? UIImage {
+                onImage(image)
+            }
+            onDismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            onDismiss()
         }
     }
 }

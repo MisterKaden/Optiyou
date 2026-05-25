@@ -24,6 +24,7 @@ struct AccountView: View {
 
             Section {
                 Button(role: .destructive) {
+                    store.signOut()
                 } label: {
                     Text("Sign out")
                         .frame(maxWidth: .infinity)
@@ -64,8 +65,7 @@ struct HelpView: View {
             if recentProblemProducts.isEmpty == false {
                 Section("Problem with a product") {
                     ForEach(recentProblemProducts) { entry in
-                        let score = ScoringEngine().score(product: entry.product, profile: store.profile)
-                        ProductListRow(product: entry.product, score: score, subtitle: "Recently scanned")
+                        ProductListRow(product: entry.product, score: entry.product.score(profile: store.profile), subtitle: "Recently scanned")
                             .padding(.vertical, 6)
                     }
                     Button("See more") {

@@ -77,7 +77,7 @@ private struct RecommendationPairCard: View {
     }
 
     private func recommendationColumn(product: Product, marker: String, markerColor: Color) -> some View {
-        let score = ScoringEngine().score(product: product, profile: store.profile)
+        let score = product.score(profile: store.profile)
 
         return Button {
             openProduct(product)

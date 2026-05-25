@@ -102,7 +102,7 @@ struct OverviewView: View {
 
     private func firstProduct(for status: ScoreStatus) -> Product? {
         store.history.first {
-            ScoringEngine().score(product: $0.product, profile: store.profile).optiFit.status == status
+            $0.product.score(profile: store.profile).optiFit.status == status
         }?.product
     }
 }

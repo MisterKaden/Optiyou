@@ -154,15 +154,7 @@ export interface ProductExplanation {
 
 export interface ProductCard {
   status: "known" | "estimated";
-  product: {
-    id: string;
-    gtin: string;
-    name: string;
-    brand: string;
-    category: ProductCategory;
-    versionId: string;
-    imageUrl?: string;
-  };
+  product: FoodProduct;
   scores: ScoreComponents;
   confidence: {
     value: number;
@@ -229,4 +221,7 @@ export interface ScanRequestBody {
   gtin: string;
   profileId?: string;
   profile?: PersonalizationProfile;
+  source?: ScanSource;
 }
+
+export type ScanSource = "barcode" | "manual_search" | "nutrition_photo" | "ingredients_photo";

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Optiyou Admin</title>
+    <link rel="stylesheet" href="/admin/admin.css" />
+    <script src="/admin/admin.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Optiyou Admin</h1>
+          <p>Review missing-product contributions, search products, and audit product truth.</p>
+        </div>
+        <p class="status">Deploy behind Cloudflare Access.</p>
+      </header>
+
+      <div class="grid">
+        <section>
+          <h2>Product Search</h2>
+          <div class="row">
+            <input id="query" placeholder="GTIN, product, or brand" />
+            <button id="search" type="button">Search</button>
+          </div>
+          <div id="products"></div>
+        </section>
+
+        <section>
+          <h2>Review Queue</h2>
+          <button id="refresh" type="button">Refresh</button>
+          <div id="queue"></div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

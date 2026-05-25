@@ -1,15 +1,25 @@
 import { buildContributionIntent, verifyUploadToken } from "../contributions/contribution-intent.ts";
 import { buildProductCard } from "../products/product-card.ts";
 import { scoreFoodProduct, FOOD_METHODOLOGY_VERSION } from "../scoring/food-scoring.ts";
-import { requireAdmin, requireUser, readSecret } from "../platform/auth.ts";
+import {
+  createAppleSignInNonce,
+  exchangeAppleIdentityToken,
+  requireAdmin,
+  requireUser,
+  readSecret
+} from "../platform/auth.ts";
 import {
   createContributionShell,
   ensureUser,
   findProductByGtin,
   listAlternatives,
+  listContributionReviewQueue,
+  listScanHistory,
   loadProfile,
   markUploadReceived,
-  recordScan
+  recordScan,
+  reviewContribution,
+  searchProducts
 } from "../platform/repository.ts";
 import { errorResponse, HttpError, jsonResponse, readJsonBody } from "./responses.ts";
 import type { FoodProduct, PersonalizationProfile, ProductCard, ScanRequestBody } from "../platform/types.ts";
@@ -34,8 +44,20 @@ export async function handleApiRequest(request: Request, env: Env, ctx: RuntimeC
       return await handleScan(request, env, ctx);
     }
 
+    if (request.method === "GET" && url.pathname === "/v1/products") {
+      return await handleProductSearch(request, env, url);
+    }
+
     if (request.method === "GET" && url.pathname.startsWith("/v1/products/")) {
       return await handleProductLookup(request, env, url);
+    }
+
+    if (request.method === "GET" && url.pathname === "/v1/auth/apple/nonce") {
+      return await handleAppleNonce(env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/v1/auth/apple") {
+      return await handleAppleSignIn(request, env);
     }
 
     if (request.method === "POST" && url.pathname === "/v1/score") {
@@ -47,7 +69,7 @@ export async function handleApiRequest(request: Request, env: Env, ctx: RuntimeC
     }
 
     if (request.method === "PUT" && url.pathname.startsWith("/v1/uploads/")) {
-      return await handleUpload(request, env, url);
+      return await handleUpload(request, env, url, ctx);
     }
 
     if (request.method === "POST" && url.pathname === "/v1/ai/ask") {
@@ -59,8 +81,7 @@ export async function handleApiRequest(request: Request, env: Env, ctx: RuntimeC
     }
 
     if (request.method === "GET" && url.pathname === "/v1/history") {
-      await requireUser(request, env);
-      return jsonResponse({ history: [], source: "scan_history", note: "History persistence is active; list pagination is the next API slice." });
+      return await handleHistory(request, env, url);
     }
 
     if (request.method === "POST" && url.pathname === "/v1/storekit/notifications") {
@@ -117,7 +138,7 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
 
   if (cached) {
     const card = JSON.parse(cached) as ProductCard;
-    ctx.waitUntil(recordKnownScan(env, user.id, persistedProfileId, body.gtin, card));
+    ctx.waitUntil(recordKnownScan(env, user.id, persistedProfileId, body.gtin, body.source ?? "barcode", card));
     ctx.waitUntil(writeScanAnalytics(env, {
       outcome: "known",
       gtin: body.gtin,
@@ -132,12 +153,11 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
   if (!product) {
     const intent = await createMissingProductIntent(request, env, user.id, body.gtin, profile.id);
     await createContributionShell(env, intent, user.id);
-    ctx.waitUntil(env.INGESTION_QUEUE.send(intent.queueMessage));
     ctx.waitUntil(recordScan(env, {
       userId: user.id,
       profileId: persistedProfileId,
       gtin: body.gtin,
-      scanSource: "barcode",
+      scanSource: body.source ?? "barcode",
       resultStatus: "missing_product"
     }));
     ctx.waitUntil(writeScanAnalytics(env, { outcome: "missing", gtin: body.gtin, userId: user.id }));
@@ -158,7 +178,7 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
     profileId: persistedProfileId,
     productId: product.id,
     gtin: body.gtin,
-    scanSource: "barcode",
+    scanSource: body.source ?? "barcode",
     resultStatus: "known",
     optiScore: card.scores.optiScore,
     optiFit: card.scores.optiFit
@@ -179,6 +199,7 @@ async function recordKnownScan(
   userId: string,
   profileId: string | undefined,
   gtin: string,
+  scanSource: NonNullable<ScanRequestBody["source"]>,
   card: ProductCard
 ): Promise<void> {
   await recordScan(env, {
@@ -186,11 +207,20 @@ async function recordKnownScan(
     profileId,
     productId: card.product.id,
     gtin,
-    scanSource: "barcode",
+    scanSource,
     resultStatus: "known",
     optiScore: card.scores.optiScore,
     optiFit: card.scores.optiFit
   });
+}
+
+async function handleProductSearch(request: Request, env: Env, url: URL): Promise<Response> {
+  await requireUser(request, env);
+  const query = url.searchParams.get("query") ?? "";
+  const limitValue = Number.parseInt(url.searchParams.get("limit") ?? "20", 10);
+  const products = await searchProducts(env, query, Number.isFinite(limitValue) ? limitValue : 20);
+
+  return jsonResponse({ products });
 }
 
 async function handleProductLookup(request: Request, env: Env, url: URL): Promise<Response> {
@@ -208,6 +238,26 @@ async function handleProductLookup(request: Request, env: Env, url: URL): Promis
   return jsonResponse({ product });
 }
 
+async function handleAppleNonce(env: Env): Promise<Response> {
+  return jsonResponse(await createAppleSignInNonce(env));
+}
+
+async function handleAppleSignIn(request: Request, env: Env): Promise<Response> {
+  const session = await exchangeAppleIdentityToken(parseAppleSignInBody(await readJsonBody(request)), env);
+  await ensureUser(env, session.user);
+
+  return jsonResponse({
+    accessToken: session.accessToken,
+    tokenType: session.tokenType,
+    expiresAt: session.expiresAt,
+    authentication: "apple",
+    user: {
+      id: session.user.id,
+      email: session.user.email
+    }
+  });
+}
+
 async function handleScore(request: Request, env: Env): Promise<Response> {
   await requireUser(request, env);
   const body = await readJsonBody(request);
@@ -218,7 +268,15 @@ async function handleScore(request: Request, env: Env): Promise<Response> {
   return jsonResponse({ score: scoreFoodProduct(body.product, body.profile) });
 }
 
-async function handleContribution(request: Request, env: Env, ctx: RuntimeContext): Promise<Response> {
+async function handleHistory(request: Request, env: Env, url: URL): Promise<Response> {
+  const user = await requireUser(request, env);
+  const limitValue = Number.parseInt(url.searchParams.get("limit") ?? "50", 10);
+  const history = await listScanHistory(env, user.id, Number.isFinite(limitValue) ? limitValue : 50);
+
+  return jsonResponse({ history, source: "scan_history" });
+}
+
+async function handleContribution(request: Request, env: Env, _ctx: RuntimeContext): Promise<Response> {
   const user = await requireUser(request, env);
   await ensureUser(env, user);
   const body = parseContributionBody(await readJsonBody(request));
@@ -226,11 +284,10 @@ async function handleContribution(request: Request, env: Env, ctx: RuntimeContex
   const intent = await createMissingProductIntent(request, env, user.id, body.gtin, profile.id);
 
   await createContributionShell(env, intent, user.id);
-  ctx.waitUntil(env.INGESTION_QUEUE.send(intent.queueMessage));
   return jsonResponse(intent, { status: 202 });
 }
 
-async function handleUpload(request: Request, env: Env, url: URL): Promise<Response> {
+async function handleUpload(request: Request, env: Env, url: URL, ctx: RuntimeContext): Promise<Response> {
   const token = url.pathname.slice("/v1/uploads/".length);
   const secret = readSecret(env, "UPLOAD_SIGNING_SECRET");
   if (!secret) {
@@ -261,12 +318,19 @@ async function handleUpload(request: Request, env: Env, url: URL): Promise<Respo
       kind: verified.kind
     }
   });
-  await markUploadReceived(env, verified.contributionId, verified.objectKey);
+  const receipt = await markUploadReceived(env, verified.contributionId, verified.objectKey);
+  if (receipt.queueMessage) {
+    ctx.waitUntil(env.INGESTION_QUEUE.send(receipt.queueMessage));
+  }
 
   return jsonResponse({
     ok: true,
     objectKey: verified.objectKey,
-    contributionId: verified.contributionId
+    contributionId: verified.contributionId,
+    status: receipt.status,
+    readyForReview: receipt.readyForReview,
+    uploadsReceived: receipt.uploads.filter((upload) => upload.status === "uploaded").length,
+    totalUploads: receipt.uploads.length
   });
 }
 
@@ -312,14 +376,20 @@ async function handleAdmin(request: Request, env: Env, url: URL): Promise<Respon
   await requireAdmin(request, env);
 
   if (request.method === "GET" && url.pathname === "/v1/admin/review-queue") {
-    const rows = await env.DB.prepare(`
-      SELECT id, product_id, status, created_at
-      FROM contributions
-      WHERE status IN ('awaiting_uploads', 'uploaded', 'needs_review')
-      ORDER BY created_at DESC
-      LIMIT 50
-    `).all();
-    return jsonResponse({ queue: rows.results });
+    return jsonResponse({ queue: await listContributionReviewQueue(env) });
+  }
+
+  const contributionMatch = /^\/v1\/admin\/contributions\/([^/]+)$/.exec(url.pathname);
+  if (request.method === "PATCH" && contributionMatch) {
+    const body = parseContributionReviewBody(await readJsonBody(request));
+    const review = await reviewContribution(env, {
+      contributionId: decodeURIComponent(contributionMatch[1]),
+      status: body.status,
+      notes: body.notes,
+      actorId: "admin"
+    });
+
+    return jsonResponse({ review });
   }
 
   if (request.method === "GET" && url.pathname === "/v1/admin/products") {
@@ -346,6 +416,7 @@ function parseScanRequest(value: unknown): ScanRequestBody {
   const gtin = Reflect.get(value, "gtin");
   const profileId = Reflect.get(value, "profileId");
   const profile = Reflect.get(value, "profile");
+  const source = Reflect.get(value, "source");
 
   if (typeof gtin !== "string" || !/^\d{8,14}$/.test(gtin)) {
     throw new HttpError(400, "invalid_gtin", "GTIN must be 8 to 14 digits.");
@@ -354,7 +425,8 @@ function parseScanRequest(value: unknown): ScanRequestBody {
   return {
     gtin,
     profileId: typeof profileId === "string" ? profileId : undefined,
-    profile: isProfile(profile) ? profile : undefined
+    profile: isProfile(profile) ? profile : undefined,
+    source: isScanSource(source) ? source : "barcode"
   };
 }
 
@@ -372,6 +444,40 @@ function parseContributionBody(value: unknown): { gtin: string; profileId?: stri
   return {
     gtin,
     profileId: typeof profileId === "string" ? profileId : undefined
+  };
+}
+
+function parseAppleSignInBody(value: unknown): { identityToken: string; nonce: string } {
+  if (!value || typeof value !== "object") {
+    throw new HttpError(400, "invalid_auth_body", "Send an Apple identity token and nonce.");
+  }
+
+  const identityToken = Reflect.get(value, "identityToken");
+  const nonce = Reflect.get(value, "nonce");
+  if (typeof identityToken !== "string" || typeof nonce !== "string") {
+    throw new HttpError(400, "invalid_auth_body", "Send an Apple identity token and nonce.");
+  }
+
+  return {
+    identityToken,
+    nonce
+  };
+}
+
+function parseContributionReviewBody(value: unknown): { status: "needs_review" | "approved" | "rejected"; notes?: string } {
+  if (!value || typeof value !== "object") {
+    throw new HttpError(400, "invalid_review_body", "Contribution review requires a JSON object.");
+  }
+
+  const status = Reflect.get(value, "status");
+  const notes = Reflect.get(value, "notes");
+  if (status !== "needs_review" && status !== "approved" && status !== "rejected") {
+    throw new HttpError(400, "invalid_review_status", "Review status must be needs_review, approved, or rejected.");
+  }
+
+  return {
+    status,
+    notes: typeof notes === "string" ? notes : undefined
   };
 }
 
@@ -460,6 +566,13 @@ function isProfile(value: unknown): value is PersonalizationProfile {
     Array.isArray(Reflect.get(value, "preferences")) &&
     Array.isArray(Reflect.get(value, "allergens")) &&
     Array.isArray(Reflect.get(value, "avoidedIngredients"));
+}
+
+function isScanSource(value: unknown): value is NonNullable<ScanRequestBody["source"]> {
+  return value === "barcode" ||
+    value === "manual_search" ||
+    value === "nutrition_photo" ||
+    value === "ingredients_photo";
 }
 
 function isIngestionQueueMessage(value: unknown): value is { contributionId: string; productId: string; gtin: string; uploadKeys: Record<string, string> } {

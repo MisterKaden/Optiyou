@@ -97,9 +97,29 @@ final class ScoringEngineTests: XCTestCase {
         XCTAssertNotNil(debouncer.shouldAccept(rawValue: "006178200002", now: start.addingTimeInterval(2.0)))
     }
 
+    func testContributionDraftKeepsSignedUploadTargetsByPhotoKind() throws {
+        let frontURL = try XCTUnwrap(URL(string: "https://optiyou.test/v1/uploads/front-token"))
+        let nutritionURL = try XCTUnwrap(URL(string: "https://optiyou.test/v1/uploads/nutrition-token"))
+        let draft = ContributionDraft(
+            id: "contrib-1",
+            gtin: "000000000999",
+            status: "awaiting_uploads",
+            confidenceLabel: "Low confidence until reviewed",
+            uploads: [
+                ContributionUpload(kind: .frontPackage, url: frontURL, expiresAt: Date(timeIntervalSince1970: 2_000)),
+                ContributionUpload(kind: .nutritionLabel, url: nutritionURL, expiresAt: Date(timeIntervalSince1970: 2_000))
+            ]
+        )
+
+        XCTAssertEqual(draft.requiredPhotos, [.frontPackage, .nutritionLabel])
+        XCTAssertEqual(draft.upload(for: .frontPackage)?.url, frontURL)
+        XCTAssertNil(draft.upload(for: .ingredientsLabel))
+    }
+
     @MainActor
     func testOverviewBucketsCountCurrentHistoryStatuses() {
         let store = AppStore()
+        store.recordScan(SampleCatalog.products[1], source: .barcode)
         let buckets = store.overviewBuckets()
 
         XCTAssertEqual(buckets.reduce(0) { $0 + $1.count }, store.history.count)

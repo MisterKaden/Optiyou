@@ -20,15 +20,7 @@ export function buildProductCard(input: BuildProductCardInput): ProductCard {
 
   return {
     status: input.status ?? "known",
-    product: {
-      id: input.product.id,
-      gtin: input.product.gtin,
-      name: input.product.name,
-      brand: input.product.brand,
-      category: input.product.category,
-      versionId: input.product.versionId,
-      imageUrl: input.product.imageUrl
-    },
+    product: input.product,
     scores: score.scoreComponents,
     confidence: {
       value: score.scoreComponents.confidenceScore,

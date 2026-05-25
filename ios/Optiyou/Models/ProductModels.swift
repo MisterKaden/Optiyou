@@ -213,6 +213,9 @@ struct Product: Identifiable, Hashable {
     var dataQuality: DataQuality
     var packageClaims: [String]
     var priceTier: PriceTier
+    var serverResult: ScoreResult? = nil
+    var serverExplanation: AIExplanation? = nil
+    var serverAlternatives: [ProductAlternativeSuggestion] = []
 }
 
 enum PriceTier: String, Hashable {
@@ -230,6 +233,48 @@ enum PriceTier: String, Hashable {
 }
 
 extension Product {
+    static func pendingContribution(gtin: String) -> Product {
+        let score = Score(value: 0, status: .poor)
+        let pendingResult = ScoreResult(
+            engineVersion: "food-us-ca-v1",
+            optiScore: score,
+            optiFit: score,
+            confidence: ConfidenceBadge(
+                value: 0,
+                label: "Awaiting review",
+                detail: "Label photos are needed before Optiyou can score this product."
+            ),
+            verdict: "This product is waiting for contribution review.",
+            reasons: [
+                ScoreReason(
+                    title: "Missing product",
+                    detail: "Optiyou has the scan, but not enough verified label data yet.",
+                    impact: .neutral
+                )
+            ],
+            warnings: []
+        )
+
+        return Product.fixture(
+            id: "missing-\(gtin)",
+            barcode: gtin,
+            name: "Product \(gtin)",
+            brand: "Missing product",
+            category: .unknown,
+            imageSystemName: "questionmark.square.dashed",
+            nutrition: NutritionFacts(
+                calories: 0,
+                addedSugarGrams: 0,
+                proteinGrams: 0,
+                fiberGrams: 0,
+                sodiumMilligrams: 0
+            ),
+            ingredients: [],
+            dataQuality: .communitySubmission,
+            serverResult: pendingResult
+        )
+    }
+
     static func fixture(
         id: String = UUID().uuidString,
         barcode: String = "000000000000",
@@ -255,7 +300,10 @@ extension Product {
         processingLevel: ProcessingLevel = .moderate,
         dataQuality: DataQuality = .verifiedDatabase,
         packageClaims: [String] = [],
-        priceTier: PriceTier = .standard
+        priceTier: PriceTier = .standard,
+        serverResult: ScoreResult? = nil,
+        serverExplanation: AIExplanation? = nil,
+        serverAlternatives: [ProductAlternativeSuggestion] = []
     ) -> Product {
         Product(
             id: id,
@@ -271,8 +319,15 @@ extension Product {
             processingLevel: processingLevel,
             dataQuality: dataQuality,
             packageClaims: packageClaims,
-            priceTier: priceTier
+            priceTier: priceTier,
+            serverResult: serverResult,
+            serverExplanation: serverExplanation,
+            serverAlternatives: serverAlternatives
         )
+    }
+
+    func score(profile: UserNutritionProfile) -> ScoreResult {
+        serverResult ?? ScoringEngine().score(product: self, profile: profile)
     }
 }
 
@@ -341,18 +396,41 @@ struct ProductCard: Identifiable, Hashable {
 }
 
 struct HistoryEntry: Identifiable, Hashable {
-    let id: UUID
+    let id: String
     var product: Product
     var source: ScanSource
     var date: Date
     var isFavorite: Bool
+    var resultStatus: String
 
-    init(id: UUID = UUID(), product: Product, source: ScanSource, date: Date, isFavorite: Bool = false) {
+    var isMissingProduct: Bool {
+        resultStatus == "missing_product"
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        product: Product,
+        source: ScanSource,
+        date: Date,
+        isFavorite: Bool = false,
+        resultStatus: String = "known"
+    ) {
         self.id = id
         self.product = product
         self.source = source
         self.date = date
         self.isFavorite = isFavorite
+        self.resultStatus = resultStatus
+    }
+
+    init(id: String = UUID().uuidString, missingGTIN gtin: String, source: ScanSource, date: Date) {
+        self.init(
+            id: id,
+            product: .pendingContribution(gtin: gtin),
+            source: source,
+            date: date,
+            resultStatus: "missing_product"
+        )
     }
 }
 
@@ -361,6 +439,16 @@ struct RecommendationPair: Identifiable, Hashable {
     var current: Product
     var replacement: Product
     var reasons: [String]
+}
+
+struct ProductAlternativeSuggestion: Identifiable, Hashable {
+    var id: String { gtin }
+    var gtin: String
+    var name: String
+    var brand: String
+    var optiFit: Int
+    var whyBetter: [String]
+    var paidPlacement: Bool
 }
 
 struct OverviewBucket: Identifiable, Hashable {
@@ -398,7 +486,45 @@ struct ContributionDraft: Identifiable, Hashable {
     var gtin: String
     var status: String
     var confidenceLabel: String
-    var requiredPhotos: [PhotoKind]
+    var uploads: [ContributionUpload]
+
+    var requiredPhotos: [PhotoKind] {
+        uploads.map(\.kind)
+    }
+
+    init(
+        id: String,
+        gtin: String,
+        status: String,
+        confidenceLabel: String,
+        uploads: [ContributionUpload]
+    ) {
+        self.id = id
+        self.gtin = gtin
+        self.status = status
+        self.confidenceLabel = confidenceLabel
+        self.uploads = uploads
+    }
+
+    init(
+        id: String,
+        gtin: String,
+        status: String,
+        confidenceLabel: String,
+        requiredPhotos: [PhotoKind]
+    ) {
+        self.init(
+            id: id,
+            gtin: gtin,
+            status: status,
+            confidenceLabel: confidenceLabel,
+            uploads: requiredPhotos.map { ContributionUpload(kind: $0) }
+        )
+    }
+
+    func upload(for kind: PhotoKind) -> ContributionUpload? {
+        uploads.first { $0.kind == kind }
+    }
 
     static func missingProduct(gtin: String) -> ContributionDraft {
         ContributionDraft(
@@ -411,9 +537,23 @@ struct ContributionDraft: Identifiable, Hashable {
     }
 }
 
+struct ContributionUpload: Identifiable, Hashable {
+    var id: ContributionDraft.PhotoKind { kind }
+    var kind: ContributionDraft.PhotoKind
+    var url: URL?
+    var expiresAt: Date?
+
+    init(kind: ContributionDraft.PhotoKind, url: URL? = nil, expiresAt: Date? = nil) {
+        self.kind = kind
+        self.url = url
+        self.expiresAt = expiresAt
+    }
+}
+
 enum ScanLookupOutcome: Hashable {
     case product(Product)
     case contribution(ContributionDraft)
+    case failure(String)
 }
 
 enum GTINNormalizer {

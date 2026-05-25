@@ -5,7 +5,7 @@ Optiyou is a product intelligence platform for U.S./Canada packaged food. The iO
 ## Service Boundaries
 
 - `optiyou-api`: public product lookup, scan, score, alternatives, contribution, upload, AI ask, methodology, profile, and history endpoints.
-- `optiyou-auth`: token verification and profile ownership. The current Worker has a bearer-token adapter; replace it with service-bound auth verification before production auth claims.
+- `optiyou-auth`: Sign in with Apple nonce issuance, Apple identity-token verification, Optiyou access-session issuance, and profile ownership. The current Worker owns this path directly; extract it behind a service binding when auth becomes its own Worker.
 - `optiyou-subscriptions`: StoreKit notification ingestion and premium entitlement sync.
 - `optiyou-ingestion`: Queue-driven product shell creation, artifact processing, OCR/extraction, score creation, and correction workflow entry.
 - `optiyou-ai`: Workers AI extraction/classification/explanation plus AI Gateway routing, caching, fallbacks, observability, and rate control.

@@ -39,14 +39,19 @@ struct HistoryView: View {
                     .foregroundStyle(Color.optiInk)
 
                 if visibleHistory.isEmpty {
-                    EmptyStateView(
-                        systemImage: showsFavoritesOnly ? "bookmark" : "clock",
-                        title: showsFavoritesOnly ? "No favorites yet" : "No scans yet",
-                        message: showsFavoritesOnly ? "Save products from a result page to keep them close." : "Scanned foods will appear here with their source and latest score."
-                    )
+                    if store.isLoadingHistory {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 36)
+                    } else {
+                        EmptyStateView(
+                            systemImage: showsFavoritesOnly ? "bookmark" : "clock",
+                            title: showsFavoritesOnly ? "No favorites yet" : "No scans yet",
+                            message: store.historyErrorMessage ?? (showsFavoritesOnly ? "Save products from a result page to keep them close." : "Scanned foods will appear here with their source and latest score.")
+                        )
+                    }
                 } else {
                     ForEach(visibleHistory) { event in
-                        let score = ScoringEngine().score(product: event.product, profile: store.profile)
                         HStack(spacing: 10) {
                             if isEditingHistory {
                                 Button {
@@ -59,19 +64,30 @@ struct HistoryView: View {
                                 .accessibilityLabel("Delete \(event.product.name) from history")
                             }
 
-                            Button {
-                                openProduct(event.product)
-                            } label: {
+                            if event.isMissingProduct {
                                 ProductListRow(
                                     product: event.product,
-                                    score: score,
-                                    subtitle: relativeDate(event.date),
-                                    showsChevron: isEditingHistory == false
+                                    score: event.product.score(profile: store.profile),
+                                    subtitle: "Contribution pending - \(relativeDate(event.date))",
+                                    showsChevron: false
                                 )
                                 .padding(.vertical, 10)
                                 .background(Color.white)
+                            } else {
+                                Button {
+                                    openProduct(event.product)
+                                } label: {
+                                    ProductListRow(
+                                        product: event.product,
+                                        score: event.product.score(profile: store.profile),
+                                        subtitle: relativeDate(event.date),
+                                        showsChevron: isEditingHistory == false
+                                    )
+                                    .padding(.vertical, 10)
+                                    .background(Color.white)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
 
                         Divider()
@@ -85,6 +101,9 @@ struct HistoryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             AppInfoToolbar(openSheet: openSheet)
+        }
+        .task {
+            await store.loadHistoryIfNeeded()
         }
     }
 
