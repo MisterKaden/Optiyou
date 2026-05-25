@@ -13,6 +13,7 @@ concurrency:
 env:
   HAS_CLOUDFLAREOPTI_API_TOKEN: ${{ secrets.CLOUDFLAREOPTI_API_TOKEN != '' }}
   HAS_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
 permissions:
   contents: read

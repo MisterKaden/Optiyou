@@ -2,7 +2,6 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "optiyou",
   "main": "src/index.ts",
-  "account_id": "75c2ecd9fee15d06f93013c411f31aaa",
   "compatibility_date": "2026-05-25",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
