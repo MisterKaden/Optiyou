@@ -19,34 +19,52 @@ struct AppRootView: View {
 }
 
 private struct MainTabView: View {
+    @State private var selectedTab: AppTab = .scan
+    @State private var activeSheet: AppSheet?
+
     var body: some View {
-        TabView {
-            ScannerTab()
+        TabView(selection: $selectedTab) {
+            HistoryTab(openSheet: showSheet)
+                .tabItem { Label("History", systemImage: "carrot") }
+                .tag(AppTab.history)
+
+            RecommendationsTab(openSheet: showSheet)
+                .tabItem { Label("Recs", systemImage: "arrow.left.arrow.right.circle") }
+                .tag(AppTab.recommendations)
+
+            ScannerTab(openSheet: showSheet)
                 .tabItem { Label("Scan", systemImage: "barcode.viewfinder") }
+                .tag(AppTab.scan)
 
-            HistoryTab()
-                .tabItem { Label("History", systemImage: "clock") }
+            OverviewTab(openSheet: showSheet)
+                .tabItem { Label("Overview", systemImage: "chart.pie") }
+                .tag(AppTab.overview)
 
-            SavedTab()
-                .tabItem { Label("Saved", systemImage: "bookmark") }
-
-            CompareTab()
-                .tabItem { Label("Compare", systemImage: "square.split.2x1") }
-
-            ProfileTab()
-                .tabItem { Label("Profile", systemImage: "person.crop.circle") }
+            SearchTab(openSheet: showSheet)
+                .tabItem { Label("Search", systemImage: "magnifyingglass") }
+                .tag(AppTab.search)
         }
         .tint(Color.optiGreen)
+        .sheet(item: $activeSheet) { sheet in
+            NavigationStack {
+                sheet.destination
+            }
+        }
+    }
+
+    private func showSheet(_ sheet: AppSheet) {
+        activeSheet = sheet
     }
 }
 
 private struct ScannerTab: View {
     @EnvironmentObject private var store: AppStore
+    var openSheet: (AppSheet) -> Void
     @State private var path: [Product] = []
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScannerView { product, source in
+            ScannerView(openSheet: openSheet) { product, source in
                 store.recordScan(product, source: source)
                 path.append(product)
             }
@@ -56,11 +74,12 @@ private struct ScannerTab: View {
 }
 
 private struct HistoryTab: View {
+    var openSheet: (AppSheet) -> Void
     @State private var path: [Product] = []
 
     var body: some View {
         NavigationStack(path: $path) {
-            HistoryView { product in
+            HistoryView(openSheet: openSheet) { product in
                 path.append(product)
             }
             .withProductDestinations()
@@ -68,12 +87,13 @@ private struct HistoryTab: View {
     }
 }
 
-private struct SavedTab: View {
+private struct RecommendationsTab: View {
+    var openSheet: (AppSheet) -> Void
     @State private var path: [Product] = []
 
     var body: some View {
         NavigationStack(path: $path) {
-            SavedProductsView { product in
+            RecommendationsView(openSheet: openSheet) { product in
                 path.append(product)
             }
             .withProductDestinations()
@@ -81,12 +101,13 @@ private struct SavedTab: View {
     }
 }
 
-private struct CompareTab: View {
+private struct OverviewTab: View {
+    var openSheet: (AppSheet) -> Void
     @State private var path: [Product] = []
 
     var body: some View {
         NavigationStack(path: $path) {
-            CompareView { product in
+            OverviewView(openSheet: openSheet) { product in
                 path.append(product)
             }
             .withProductDestinations()
@@ -94,10 +115,16 @@ private struct CompareTab: View {
     }
 }
 
-private struct ProfileTab: View {
+private struct SearchTab: View {
+    var openSheet: (AppSheet) -> Void
+    @State private var path: [Product] = []
+
     var body: some View {
-        NavigationStack {
-            ProfileView()
+        NavigationStack(path: $path) {
+            SearchView(openSheet: openSheet) { product in
+                path.append(product)
+            }
+            .withProductDestinations()
         }
     }
 }
@@ -108,4 +135,48 @@ private extension View {
             ProductResultView(product: product)
         }
     }
+}
+
+enum AppTab: Hashable {
+    case history
+    case recommendations
+    case scan
+    case overview
+    case search
+}
+
+enum AppSheet: Identifiable {
+    case account
+    case help
+    case premium
+    case contribute
+    case profile
+
+    var id: String {
+        switch self {
+        case .account: "account"
+        case .help: "help"
+        case .premium: "premium"
+        case .contribute: "contribute"
+        case .profile: "profile"
+        }
+    }
+
+    @MainActor
+    @ViewBuilder
+    var destination: some View {
+        switch self {
+        case .account:
+            AccountView()
+        case .help:
+            HelpView()
+        case .premium:
+            PremiumView()
+        case .contribute:
+            ContributeView()
+        case .profile:
+            ProfileView()
+        }
+    }
+
 }

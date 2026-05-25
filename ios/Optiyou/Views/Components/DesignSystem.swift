@@ -141,15 +141,86 @@ struct ProductThumbnail: View {
         ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color.optiGreen.opacity(0.1))
-            Image(systemName: product.imageSystemName)
-                .font(.system(size: size * 0.38, weight: .semibold))
-                .foregroundStyle(Color.optiGreen)
+            if let imageURL = product.imageURL {
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case let .success(image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .padding(6)
+                    default:
+                        Image(systemName: product.imageSystemName)
+                            .font(.system(size: size * 0.38, weight: .semibold))
+                            .foregroundStyle(Color.optiGreen)
+                    }
+                }
+            } else {
+                Image(systemName: product.imageSystemName)
+                    .font(.system(size: size * 0.38, weight: .semibold))
+                    .foregroundStyle(Color.optiGreen)
+            }
         }
         .frame(width: size, height: size)
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.optiLine, lineWidth: 1)
         )
+    }
+}
+
+struct RatingDot: View {
+    var status: ScoreStatus
+    var size: CGFloat = 12
+
+    var body: some View {
+        Circle()
+            .fill(status.color)
+            .frame(width: size, height: size)
+            .accessibilityLabel(status.title)
+    }
+}
+
+struct ProductListRow: View {
+    var product: Product
+    var score: ScoreResult
+    var subtitle: String?
+    var showsChevron = true
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ProductThumbnail(product: product, size: 74)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(product.name)
+                    .font(.headline)
+                    .foregroundStyle(Color.optiInk)
+                    .lineLimit(2)
+                Text(product.brand)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.optiMuted)
+                HStack(spacing: 7) {
+                    RatingDot(status: score.optiFit.status)
+                    Text(score.optiFit.status.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.optiMuted)
+                }
+                if let subtitle {
+                    Label(subtitle, systemImage: "clock")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.optiMuted)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(Color.optiMuted.opacity(0.42))
+            }
+        }
+        .contentShape(Rectangle())
     }
 }
 
@@ -186,6 +257,42 @@ struct ProductRow: View {
             }
         }
         .contentShape(Rectangle())
+    }
+}
+
+struct AppInfoToolbar: ToolbarContent {
+    var openSheet: (AppSheet) -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Menu {
+                Button {
+                    openSheet(.profile)
+                } label: {
+                    Label("Profile", systemImage: "person.crop.circle")
+                }
+                Button {
+                    openSheet(.account)
+                } label: {
+                    Label("Account", systemImage: "person.text.rectangle")
+                }
+                Button {
+                    openSheet(.help)
+                } label: {
+                    Label("Help", systemImage: "questionmark.circle")
+                }
+                Button {
+                    openSheet(.premium)
+                } label: {
+                    Label("Premium", systemImage: "sparkles")
+                }
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.optiGreen)
+                    .accessibilityLabel("Account and help")
+            }
+        }
     }
 }
 

@@ -3,6 +3,8 @@ import SwiftUI
 struct ProductResultView: View {
     @EnvironmentObject private var store: AppStore
     let product: Product
+    @State private var showsScoringMethod = false
+    @State private var showsIssueReport = false
 
     private var result: ScoreResult {
         ScoringEngine().score(product: product, profile: store.profile)
@@ -17,6 +19,7 @@ struct ProductResultView: View {
             VStack(alignment: .leading, spacing: 14) {
                 heroCard
                 warningsCard
+                driverSummaryCard
                 nutritionCard
                 ingredientsCard
                 additivesCard
@@ -24,6 +27,7 @@ struct ProductResultView: View {
                 allergensCard
                 preferencesCard
                 swapsCard
+                optionsCard
                 askOptiyouCard
             }
             .padding(16)
@@ -31,18 +35,29 @@ struct ProductResultView: View {
         .background(Color.optiBackground.ignoresSafeArea())
         .navigationTitle(product.name)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showsScoringMethod) {
+            NavigationStack {
+                ScoringMethodView()
+            }
+        }
+        .sheet(isPresented: $showsIssueReport) {
+            NavigationStack {
+                IssueReportView(product: product)
+            }
+        }
     }
 
     private var heroCard: some View {
         SectionCard {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 14) {
-                    ProductThumbnail(product: product, size: 104)
+                    ProductThumbnail(product: product, size: 132)
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text(product.name)
-                            .font(.title2.weight(.black))
+                            .font(.title.weight(.black))
                             .foregroundStyle(Color.optiInk)
+                            .fixedSize(horizontal: false, vertical: true)
                         Text(product.brand)
                             .font(.headline)
                             .foregroundStyle(Color.optiMuted)
@@ -54,19 +69,9 @@ struct ProductResultView: View {
                     }
 
                     Spacer()
-
-                    Button {
-                        store.toggleSaved(product)
-                    } label: {
-                        Image(systemName: store.isSaved(product) ? "bookmark.fill" : "bookmark")
-                            .font(.title3.weight(.bold))
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(Color.optiGreen)
-                    .accessibilityLabel(store.isSaved(product) ? "Unsave product" : "Save product")
                 }
 
-                HStack(spacing: 24) {
+                HStack(alignment: .center, spacing: 24) {
                     ScoreDial(label: "OptiScore", score: result.optiScore)
                     ScoreDial(label: "OptiFit", score: result.optiFit)
                     Spacer(minLength: 0)
@@ -79,6 +84,28 @@ struct ProductResultView: View {
                 Text("Scores are deterministic. AI explains the label, but does not decide the score.")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.optiMuted)
+            }
+        }
+    }
+
+    private var driverSummaryCard: some View {
+        SectionCard {
+            VStack(alignment: .leading, spacing: 14) {
+                if negativeDrivers.isEmpty == false {
+                    Text("Negatives")
+                        .font(.title2.weight(.black))
+                    ForEach(negativeDrivers) { reason in
+                        DriverRow(reason: reason, value: nutritionValue(for: reason))
+                    }
+                }
+
+                if positiveDrivers.isEmpty == false {
+                    Text("Positives")
+                        .font(.title2.weight(.black))
+                    ForEach(positiveDrivers) { reason in
+                        DriverRow(reason: reason, value: nutritionValue(for: reason))
+                    }
+                }
             }
         }
     }
@@ -208,12 +235,55 @@ struct ProductResultView: View {
                     let swapResult = ScoringEngine().score(product: swap, profile: store.profile)
                     VStack(alignment: .leading, spacing: 8) {
                         ProductRow(product: swap, score: swapResult)
-                        Text(swapReason(from: product, to: swap))
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(Color.optiMuted)
+                        ForEach(SampleCatalog.swapReasons(from: product, to: swap, profile: store.profile), id: \.self) { reason in
+                            Label(reason, systemImage: "checkmark.circle")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(Color.optiMuted)
+                        }
                     }
                     if swap.id != swaps.last?.id {
                         Divider()
+                    }
+                }
+            }
+        }
+    }
+
+    private var optionsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Options")
+                .font(.title2.weight(.black))
+                .foregroundStyle(Color.optiInk)
+
+            SectionCard {
+                VStack(spacing: 0) {
+                    optionButton(
+                        title: store.isSaved(product) ? "Remove from favorites" : "Add to favorites",
+                        systemImage: store.isSaved(product) ? "star.fill" : "star"
+                    ) {
+                        store.toggleSaved(product)
+                    }
+                    Divider()
+                    NavigationLink {
+                        ProfileView()
+                    } label: {
+                        optionLabel(title: "Food preferences", systemImage: "slider.horizontal.3")
+                    }
+                    Divider()
+                    optionButton(title: "Delete from history", systemImage: "trash") {
+                        store.removeProductFromHistory(product)
+                    }
+                }
+            }
+
+            SectionCard {
+                VStack(spacing: 0) {
+                    optionButton(title: "Scoring method", systemImage: "doc.text.magnifyingglass") {
+                        showsScoringMethod = true
+                    }
+                    Divider()
+                    optionButton(title: "An issue with this product?", systemImage: "exclamationmark.circle") {
+                        showsIssueReport = true
                     }
                 }
             }
@@ -250,24 +320,154 @@ struct ProductResultView: View {
         }
     }
 
-    private func swapReason(from current: Product, to swap: Product) -> String {
-        if swap.nutrition.addedSugarGrams < current.nutrition.addedSugarGrams {
-            return "Better because it has less added sugar in the same category."
-        }
-
-        if swap.nutrition.fiberGrams > current.nutrition.fiberGrams {
-            return "Better because it has more fiber for a similar use."
-        }
-
-        if swap.nutrition.proteinGrams > current.nutrition.proteinGrams {
-            return "Better because it has more protein for your profile."
-        }
-
-        return "Better because its same-category OptiFit is higher for your profile."
-    }
-
     private func formatted(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(0...1)))
+    }
+
+    private var negativeDrivers: [ScoreReason] {
+        result.reasons.filter { $0.impact == .negative }
+    }
+
+    private var positiveDrivers: [ScoreReason] {
+        result.reasons.filter { $0.impact == .positive }
+    }
+
+    private func nutritionValue(for reason: ScoreReason) -> String {
+        switch reason.title {
+        case "Added sugar":
+            "\(formatted(product.nutrition.addedSugarGrams))g"
+        case "Fiber context":
+            "\(formatted(product.nutrition.fiberGrams))g"
+        case "Protein support":
+            "\(formatted(product.nutrition.proteinGrams))g"
+        default:
+            ""
+        }
+    }
+
+    private func optionButton(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            optionLabel(title: title, systemImage: systemImage)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func optionLabel(title: String, systemImage: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(Color.optiInk)
+            Spacer()
+            Image(systemName: systemImage)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color.optiInk)
+        }
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct DriverRow: View {
+    var reason: ScoreReason
+    var value: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: reason.impact.systemImage)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(Color.optiMuted)
+                .frame(width: 34)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(reason.title)
+                    .font(.headline)
+                    .foregroundStyle(Color.optiInk)
+                Text(reason.detail)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.optiMuted)
+            }
+            Spacer()
+            if value.isEmpty == false {
+                Text(value)
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(Color.optiMuted)
+            }
+            RatingDot(status: reason.impact == .positive ? .good : .poor, size: 14)
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+private struct ScoringMethodView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Scoring method")
+                    .font(.largeTitle.weight(.black))
+                SectionCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Deterministic scoring engine", systemImage: "checkmark.shield")
+                        Label("AI explains labels and reason codes", systemImage: "sparkles")
+                        Label("No paid placements or score manipulation", systemImage: "hand.raised")
+                        Label("U.S. and Canada packaged food only", systemImage: "map")
+                    }
+                    .font(.headline.weight(.semibold))
+                }
+                Text("OptiScore reflects general product quality. OptiFit adjusts the result for your profile. Low-confidence extracted data is labeled and should not be treated as verified fact.")
+                    .font(.headline)
+                    .foregroundStyle(Color.optiMuted)
+            }
+            .padding(16)
+        }
+        .background(Color.optiBackground.ignoresSafeArea())
+        .navigationTitle("Methodology")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
+        }
+    }
+}
+
+private struct IssueReportView: View {
+    @Environment(\.dismiss) private var dismiss
+    var product: Product
+
+    var body: some View {
+        List {
+            Section("Product") {
+                LabeledContent("Name", value: product.name)
+                LabeledContent("Brand", value: product.brand)
+                LabeledContent("Barcode", value: product.barcode)
+            }
+
+            Section("What looks wrong?") {
+                Button("Nutrition facts") {}
+                Button("Ingredients or additives") {}
+                Button("Allergens or preferences") {}
+                Button("Product photo or name") {}
+                Button("Other issue") {}
+            }
+
+            Section {
+                Text("Corrections go to review before changing structured product truth.")
+                    .font(.footnote)
+                    .foregroundStyle(Color.optiMuted)
+            }
+        }
+        .navigationTitle("Report issue")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
+        }
     }
 }
 

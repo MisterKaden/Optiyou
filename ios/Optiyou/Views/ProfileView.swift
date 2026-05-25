@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ProfileView: View {
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: AppStore
 
     var body: some View {
@@ -49,10 +50,19 @@ struct ProfileView: View {
         .background(Color.optiBackground.ignoresSafeArea())
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
+        }
     }
 }
 
 struct PremiumView: View {
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -66,6 +76,13 @@ struct PremiumView: View {
         }
         .background(Color.optiBackground.ignoresSafeArea())
         .navigationTitle("Premium")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
+        }
     }
 
     private func premiumRow(_ title: String, _ detail: String) -> some View {
@@ -82,6 +99,8 @@ struct PremiumView: View {
 }
 
 struct ContributeView: View {
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -101,5 +120,12 @@ struct ContributeView: View {
         }
         .background(Color.optiBackground.ignoresSafeArea())
         .navigationTitle("Contribute")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
+        }
     }
 }

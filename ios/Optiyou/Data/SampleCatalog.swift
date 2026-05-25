@@ -107,6 +107,24 @@ enum SampleCatalog {
         products.first { $0.id == id }
     }
 
+    static func product(barcode: String) -> Product? {
+        products.first { $0.barcode == barcode }
+    }
+
+    static func search(_ query: String) -> [Product] {
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard term.isEmpty == false else {
+            return []
+        }
+
+        return products.filter {
+            $0.name.localizedCaseInsensitiveContains(term) ||
+                $0.brand.localizedCaseInsensitiveContains(term) ||
+                $0.category.title.localizedCaseInsensitiveContains(term) ||
+                $0.barcode.contains(term)
+        }
+    }
+
     static func betterSwaps(for product: Product, profile: UserNutritionProfile) -> [Product] {
         let engine = ScoringEngine()
         let currentFit = engine.score(product: product, profile: profile).optiFit.value
@@ -120,6 +138,39 @@ enum SampleCatalog {
             .sorted { $0.1 > $1.1 }
             .prefix(3)
             .map(\.0)
+    }
+
+    static func recommendationPair(for product: Product, profile: UserNutritionProfile) -> RecommendationPair? {
+        guard let replacement = betterSwaps(for: product, profile: profile).first else {
+            return nil
+        }
+
+        return RecommendationPair(
+            current: product,
+            replacement: replacement,
+            reasons: swapReasons(from: product, to: replacement, profile: profile)
+        )
+    }
+
+    static func swapReasons(from current: Product, to replacement: Product, profile: UserNutritionProfile) -> [String] {
+        var reasons: [String] = []
+
+        if replacement.nutrition.addedSugarGrams < current.nutrition.addedSugarGrams {
+            reasons.append("Less added sugar")
+        }
+        if replacement.nutrition.fiberGrams > current.nutrition.fiberGrams {
+            reasons.append("More fiber")
+        }
+        if replacement.nutrition.proteinGrams > current.nutrition.proteinGrams {
+            reasons.append("More protein")
+        }
+        if profile.preferences.contains(.avoidDyes),
+           current.ingredients.contains(where: { $0.flags.contains(.syntheticDye) }),
+           replacement.ingredients.contains(where: { $0.flags.contains(.syntheticDye) }) == false {
+            reasons.append("No synthetic dye flag")
+        }
+
+        return reasons.isEmpty ? ["Higher OptiFit in the same category"] : reasons
     }
 }
 

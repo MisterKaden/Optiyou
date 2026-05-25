@@ -1,150 +1,343 @@
+import AVFoundation
+import AudioToolbox
 import SwiftUI
+import Vision
+import VisionKit
 
 struct ScannerView: View {
+    @EnvironmentObject private var store: AppStore
+    var openSheet: (AppSheet) -> Void
     var openProduct: (Product, ScanSource) -> Void
-    @State private var query = ""
 
-    private let parser = ProductParser()
+    @State private var sessionState: ScanSessionState = .idle
+    @State private var debouncer = BarcodeScanDebouncer()
+    @State private var isTorchOn = false
+    @State private var isSoundOn = true
+    @State private var showsManualSearch = false
+    @State private var contributionDraft: ContributionDraft?
+    @State private var cameraAuthorization = AVCaptureDevice.authorizationStatus(for: .video)
+
+    private var scannerAvailable: Bool {
+        DataScannerViewController.isSupported &&
+            cameraAuthorization != .denied &&
+            cameraAuthorization != .restricted &&
+            (cameraAuthorization != .authorized || DataScannerViewController.isAvailable)
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Scan smarter. Choose better.")
-                        .font(.largeTitle.weight(.black))
-                        .foregroundStyle(Color.optiInk)
-                    Text("Packaged food scanner for the U.S. and Canada.")
-                        .font(.headline)
-                        .foregroundStyle(Color.optiMuted)
-                }
+        ZStack {
+            scannerSurface
+                .ignoresSafeArea()
 
-                scannerPanel
-
-                manualSearch
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Recent examples")
-                        .font(.title3.weight(.black))
-                    ForEach(SampleCatalog.products) { product in
-                        let result = ScoringEngine().score(product: product, profile: UserNutritionProfile(preferences: [.lowSugar], allergens: []))
-                        Button {
-                            open(product, source: .manualSearch)
-                        } label: {
-                            ProductRow(product: product, score: result)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            .padding(16)
+            scannerOverlay
         }
-        .background(Color.optiBackground.ignoresSafeArea())
+        .background(Color.black.ignoresSafeArea())
         .navigationTitle("Scan")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var scannerPanel: some View {
-        SectionCard {
-            VStack(spacing: 16) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.optiInk)
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.white.opacity(0.86), style: StrokeStyle(lineWidth: 2, dash: [16, 10]))
-                        .padding(24)
-                    VStack(spacing: 10) {
-                        Image(systemName: "barcode.viewfinder")
-                            .font(.system(size: 46, weight: .semibold))
-                        Text("Ready to scan")
-                            .font(.title3.weight(.black))
-                    }
-                    .foregroundStyle(.white)
-                }
-                .frame(height: 300)
-
-                Button {
-                    open(SampleCatalog.products[1], source: .barcode)
-                } label: {
-                    Label("Scan Barcode", systemImage: "barcode.viewfinder")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .tint(Color.optiGreen)
-
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    scanModeButton(title: "Scan Nutrition", source: .nutritionPhoto, product: SampleCatalog.products[4])
-                    scanModeButton(title: "Scan Ingredients", source: .ingredientsPhoto, product: SampleCatalog.products[3])
-                    scanModeButton(title: "Search Manually", source: .manualSearch, product: SampleCatalog.products[0])
-                    scanModeButton(title: "Compare Food", source: .manualSearch, product: SampleCatalog.products[2])
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            requestCameraAccessIfNeeded()
+            sessionState = scannerAvailable ? .scanning : .unavailable(unavailableScannerMessage)
+        }
+        .sheet(isPresented: $showsManualSearch) {
+            NavigationStack {
+                SearchView(openSheet: openSheet) { product in
+                    showsManualSearch = false
+                    openProduct(product, .manualSearch)
                 }
             }
         }
+        .sheet(item: $contributionDraft) { draft in
+            ContributionDraftSheet(draft: draft)
+        }
     }
 
-    private var manualSearch: some View {
-        SectionCard {
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Manual search", systemImage: "magnifyingglass")
-                    .font(.headline)
-                TextField("Search cereal, yogurt, snack bars...", text: $query)
-                    .textFieldStyle(.roundedBorder)
-                    .submitLabel(.search)
-                    .onSubmit {
-                        if let first = filteredProducts.first {
-                            open(first, source: .manualSearch)
-                        }
-                    }
+    @ViewBuilder
+    private var scannerSurface: some View {
+        if scannerAvailable {
+            BarcodeDataScannerView(isScanning: sessionState.isActivelyScanning) { rawBarcode in
+                handleDetectedBarcode(rawBarcode)
+            }
+        } else {
+            LinearGradient(
+                colors: [Color.black, Color.optiInk, Color.black],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+    }
 
-                if query.isEmpty == false {
-                    ForEach(filteredProducts) { product in
-                        Button {
-                            open(product, source: .manualSearch)
-                        } label: {
-                            HStack {
-                                Text(product.name)
-                                    .font(.subheadline.weight(.bold))
-                                Spacer()
-                                Image(systemName: "arrow.right")
-                            }
-                            .foregroundStyle(Color.optiInk)
-                        }
-                        .buttonStyle(.plain)
-                    }
+    private var scannerOverlay: some View {
+        VStack {
+            HStack {
+                controlButton(systemImage: isTorchOn ? "flashlight.on.fill" : "flashlight.off.fill") {
+                    toggleTorch()
+                }
+                Spacer()
+                controlButton(systemImage: isSoundOn ? "speaker.wave.2.fill" : "speaker.slash.fill") {
+                    isSoundOn.toggle()
                 }
             }
+            .padding(.horizontal, 24)
+            .padding(.top, 44)
+
+            Spacer()
+
+            VStack(spacing: 18) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.white, lineWidth: 3)
+                    .frame(height: 210)
+                    .padding(.horizontal, 38)
+                VStack(spacing: 8) {
+                    Text(sessionState.title)
+                        .font(.headline.weight(.black))
+                    Text(sessionState.detail)
+                        .font(.caption.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 72)
+            }
+
+            Spacer()
+
+            fallbackBar
         }
     }
 
-    private var filteredProducts: [Product] {
-        guard query.isEmpty == false else { return [] }
-        return SampleCatalog.products.filter {
-            $0.name.localizedCaseInsensitiveContains(query) ||
-                $0.brand.localizedCaseInsensitiveContains(query) ||
-                $0.category.title.localizedCaseInsensitiveContains(query)
+    private var fallbackBar: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                fallbackButton("Search", systemImage: "magnifyingglass") {
+                    showsManualSearch = true
+                }
+                fallbackButton("Nutrition", systemImage: "tablecells") {
+                    openProduct(SampleCatalog.products[4], .nutritionPhoto)
+                }
+                fallbackButton("Ingredients", systemImage: "text.viewfinder") {
+                    openProduct(SampleCatalog.products[3], .ingredientsPhoto)
+                }
+            }
+
+            Button {
+                openSheet(.contribute)
+            } label: {
+                Label("No barcode? Contribute label photos", systemImage: "camera.viewfinder")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .tint(.white)
+        }
+        .padding(16)
+        .background(.black.opacity(0.72))
+    }
+
+    private func controlButton(systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(.black.opacity(0.5))
+                .clipShape(Circle())
         }
     }
 
-    private func scanModeButton(title: String, source: ScanSource, product: Product) -> some View {
-        Button {
-            open(product, source: source)
-        } label: {
-            VStack(spacing: 8) {
-                Image(systemName: source.systemImage)
-                    .font(.title3.weight(.bold))
+    private func fallbackButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.headline.weight(.bold))
                 Text(title)
                     .font(.caption.weight(.black))
-                    .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 72)
+            .frame(height: 58)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.borderedProminent)
         .tint(Color.optiGreen)
     }
 
-    private func open(_ product: Product, source: ScanSource) {
-        let parsedProduct = parser.parse(StructuredProductInput(source: source, product: product))
-        openProduct(parsedProduct, source)
+    private func handleDetectedBarcode(_ rawBarcode: String) {
+        guard case .scanning = sessionState,
+              let result = debouncer.shouldAccept(rawValue: rawBarcode) else {
+            return
+        }
+
+        if isSoundOn {
+            AudioServicesPlaySystemSound(1108)
+        }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            await processScan(result)
+        }
+    }
+
+    private func processScan(_ result: BarcodeScanResult) async {
+        sessionState = .processing(result.normalizedGTIN)
+        let outcome = await store.scanBarcode(result.normalizedGTIN)
+
+        switch outcome {
+        case let .product(product):
+            sessionState = .productFound(result.normalizedGTIN)
+            openProduct(product, .barcode)
+        case let .contribution(draft):
+            sessionState = .unknownProduct(result.normalizedGTIN)
+            contributionDraft = draft
+        }
+
+        try? await Task.sleep(for: .seconds(1.2))
+        if case .productFound = sessionState {
+            sessionState = .scanning
+        }
+    }
+
+    private func toggleTorch() {
+        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else {
+            return
+        }
+
+        do {
+            try device.lockForConfiguration()
+            if isTorchOn {
+                device.torchMode = .off
+            } else {
+                try device.setTorchModeOn(level: AVCaptureDevice.maxAvailableTorchLevel)
+            }
+            device.unlockForConfiguration()
+            isTorchOn.toggle()
+        } catch {
+            sessionState = .failed("Flashlight is not available right now.")
+        }
+    }
+
+    private func requestCameraAccessIfNeeded() {
+        guard DataScannerViewController.isSupported, cameraAuthorization == .notDetermined else {
+            return
+        }
+
+        AVCaptureDevice.requestAccess(for: .video) { granted in
+            Task { @MainActor in
+                cameraAuthorization = AVCaptureDevice.authorizationStatus(for: .video)
+                sessionState = granted && DataScannerViewController.isSupported ? .scanning : .unavailable(unavailableScannerMessage)
+            }
+        }
+    }
+
+    private var unavailableScannerMessage: String {
+        if DataScannerViewController.isSupported == false {
+            return "This device does not support live data scanning. Use search or label-photo contribution."
+        }
+        return "Camera permission is blocked or restricted. Enable camera access, or use search and label-photo contribution."
+    }
+}
+
+private struct BarcodeDataScannerView: UIViewControllerRepresentable {
+    var isScanning: Bool
+    var onBarcode: (String) -> Void
+
+    func makeUIViewController(context: Context) -> DataScannerViewController {
+        let scanner = DataScannerViewController(
+            recognizedDataTypes: [.barcode(symbologies: [.ean8, .ean13, .upce])],
+            qualityLevel: .fast,
+            recognizesMultipleItems: false,
+            isHighFrameRateTrackingEnabled: true,
+            isPinchToZoomEnabled: true,
+            isGuidanceEnabled: true,
+            isHighlightingEnabled: true
+        )
+        scanner.delegate = context.coordinator
+        return scanner
+    }
+
+    func updateUIViewController(_ scanner: DataScannerViewController, context: Context) {
+        if isScanning, scanner.isScanning == false {
+            try? scanner.startScanning()
+        } else if isScanning == false, scanner.isScanning {
+            scanner.stopScanning()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onBarcode: onBarcode)
+    }
+
+    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
+        var onBarcode: (String) -> Void
+
+        init(onBarcode: @escaping (String) -> Void) {
+            self.onBarcode = onBarcode
+        }
+
+        func dataScanner(
+            _ dataScanner: DataScannerViewController,
+            didAdd addedItems: [RecognizedItem],
+            allItems: [RecognizedItem]
+        ) {
+            handle(items: addedItems)
+        }
+
+        func dataScanner(
+            _ dataScanner: DataScannerViewController,
+            didTapOn item: RecognizedItem
+        ) {
+            handle(items: [item])
+        }
+
+        private func handle(items: [RecognizedItem]) {
+            for item in items {
+                if case let .barcode(barcode) = item,
+                   let value = barcode.payloadStringValue {
+                    onBarcode(value)
+                    return
+                }
+            }
+        }
+    }
+}
+
+private struct ContributionDraftSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var draft: ContributionDraft
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Help Optiyou learn this product")
+                    .font(.largeTitle.weight(.black))
+                    .foregroundStyle(Color.optiInk)
+                Text("Barcode \(draft.gtin) is not in the verified food catalog yet.")
+                    .font(.headline)
+                    .foregroundStyle(Color.optiMuted)
+
+                SectionCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        StatusBadge(title: draft.confidenceLabel, systemImage: "scope", color: .optiAmber)
+                        ForEach(draft.requiredPhotos) { photo in
+                            Label(photo.title, systemImage: photo.systemImage)
+                                .font(.headline.weight(.bold))
+                        }
+                    }
+                }
+
+                Text("AI can extract the label, but Optiyou marks the result as estimated until data quality improves.")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.optiMuted)
+
+                Spacer()
+            }
+            .padding(16)
+            .background(Color.optiBackground.ignoresSafeArea())
+            .navigationTitle("Contribution")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }

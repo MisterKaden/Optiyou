@@ -1,6 +1,7 @@
 import Foundation
 
 enum ProductCategory: String, CaseIterable, Hashable, Identifiable {
+    case unknown
     case cereal
     case yogurt
     case snackBar
@@ -12,6 +13,7 @@ enum ProductCategory: String, CaseIterable, Hashable, Identifiable {
 
     var title: String {
         switch self {
+        case .unknown: "Unknown food"
         case .cereal: "Cereal"
         case .yogurt: "Yogurt"
         case .snackBar: "Snack bar"
@@ -203,6 +205,7 @@ struct Product: Identifiable, Hashable {
     var brand: String
     var category: ProductCategory
     var imageSystemName: String
+    var imageURL: URL?
     var nutrition: NutritionFacts
     var ingredients: [Ingredient]
     var allergens: Set<Allergen>
@@ -234,6 +237,7 @@ extension Product {
         brand: String = "Optiyou Test Kitchen",
         category: ProductCategory = .preparedMeal,
         imageSystemName: String = "takeoutbag.and.cup.and.straw",
+        imageURL: URL? = nil,
         nutrition: NutritionFacts = NutritionFacts(
             calories: 320,
             addedSugarGrams: 3,
@@ -260,6 +264,7 @@ extension Product {
             brand: brand,
             category: category,
             imageSystemName: imageSystemName,
+            imageURL: imageURL,
             nutrition: nutrition,
             ingredients: ingredients,
             allergens: Set(allergens),
@@ -268,5 +273,177 @@ extension Product {
             packageClaims: packageClaims,
             priceTier: priceTier
         )
+    }
+}
+
+struct BarcodeScanResult: Equatable, Hashable {
+    var rawValue: String
+    var normalizedGTIN: String
+    var detectedAt: Date
+}
+
+enum ScanSessionState: Equatable {
+    case idle
+    case scanning
+    case processing(String)
+    case productFound(String)
+    case unknownProduct(String)
+    case unavailable(String)
+    case failed(String)
+
+    var isActivelyScanning: Bool {
+        switch self {
+        case .scanning:
+            true
+        default:
+            false
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .idle: "Ready when you are"
+        case .scanning: "Point at a barcode"
+        case .processing: "Checking product"
+        case .productFound: "Product found"
+        case .unknownProduct: "Product not found yet"
+        case .unavailable: "Scanner unavailable"
+        case .failed: "Scan needs another try"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .idle:
+            "Optiyou opens the camera first so scanning feels instant."
+        case .scanning:
+            "Hold the barcode inside the frame. Detection is automatic."
+        case let .processing(gtin):
+            "Looking up \(gtin) with your profile."
+        case let .productFound(gtin):
+            "Loaded \(gtin)."
+        case let .unknownProduct(gtin):
+            "\(gtin) needs a label contribution before confidence can improve."
+        case let .unavailable(reason):
+            reason
+        case let .failed(message):
+            message
+        }
+    }
+}
+
+struct ProductCard: Identifiable, Hashable {
+    var id: String { product.id }
+    var product: Product
+    var result: ScoreResult
+    var explanation: AIExplanation
+    var alternatives: [Product]
+}
+
+struct HistoryEntry: Identifiable, Hashable {
+    let id: UUID
+    var product: Product
+    var source: ScanSource
+    var date: Date
+    var isFavorite: Bool
+
+    init(id: UUID = UUID(), product: Product, source: ScanSource, date: Date, isFavorite: Bool = false) {
+        self.id = id
+        self.product = product
+        self.source = source
+        self.date = date
+        self.isFavorite = isFavorite
+    }
+}
+
+struct RecommendationPair: Identifiable, Hashable {
+    var id: String { "\(current.id)-\(replacement.id)" }
+    var current: Product
+    var replacement: Product
+    var reasons: [String]
+}
+
+struct OverviewBucket: Identifiable, Hashable {
+    var id: ScoreStatus { status }
+    var status: ScoreStatus
+    var count: Int
+}
+
+struct ContributionDraft: Identifiable, Hashable {
+    enum PhotoKind: String, CaseIterable, Hashable, Identifiable {
+        case frontPackage
+        case nutritionLabel
+        case ingredientsLabel
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .frontPackage: "Front package"
+            case .nutritionLabel: "Nutrition label"
+            case .ingredientsLabel: "Ingredients list"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .frontPackage: "shippingbox"
+            case .nutritionLabel: "tablecells"
+            case .ingredientsLabel: "text.viewfinder"
+            }
+        }
+    }
+
+    var id: String
+    var gtin: String
+    var status: String
+    var confidenceLabel: String
+    var requiredPhotos: [PhotoKind]
+
+    static func missingProduct(gtin: String) -> ContributionDraft {
+        ContributionDraft(
+            id: "draft-\(gtin)",
+            gtin: gtin,
+            status: "Awaiting label photos",
+            confidenceLabel: "Low confidence until reviewed",
+            requiredPhotos: PhotoKind.allCases
+        )
+    }
+}
+
+enum ScanLookupOutcome: Hashable {
+    case product(Product)
+    case contribution(ContributionDraft)
+}
+
+enum GTINNormalizer {
+    static func normalize(_ value: String) -> String? {
+        let digits = value.filter(\.isNumber)
+        let normalized = digits.count == 13 && digits.hasPrefix("0") ? String(digits.dropFirst()) : digits
+        guard (8...14).contains(normalized.count) else {
+            return nil
+        }
+        return normalized
+    }
+}
+
+struct BarcodeScanDebouncer {
+    var interval: TimeInterval = 1.5
+    private(set) var lastAccepted: BarcodeScanResult?
+
+    mutating func shouldAccept(rawValue: String, now: Date = .now) -> BarcodeScanResult? {
+        guard let normalized = GTINNormalizer.normalize(rawValue) else {
+            return nil
+        }
+
+        if let lastAccepted,
+           lastAccepted.normalizedGTIN == normalized,
+           now.timeIntervalSince(lastAccepted.detectedAt) < interval {
+            return nil
+        }
+
+        let result = BarcodeScanResult(rawValue: rawValue, normalizedGTIN: normalized, detectedAt: now)
+        lastAccepted = result
+        return result
     }
 }

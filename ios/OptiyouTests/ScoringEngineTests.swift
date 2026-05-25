@@ -79,4 +79,43 @@ final class ScoringEngineTests: XCTestCase {
         XCTAssertLessThan(result.optiFit.value, 50)
         XCTAssertTrue(result.warnings.contains { $0.severity == .critical && $0.title == "Contains dairy" })
     }
+
+    func testGTINNormalizerHandlesVisionKitEANPrefixAndInvalidCodes() {
+        XCTAssertEqual(GTINNormalizer.normalize("0 06178200002"), "006178200002")
+        XCTAssertEqual(GTINNormalizer.normalize("0006178200002"), "006178200002")
+        XCTAssertEqual(GTINNormalizer.normalize("12345678"), "12345678")
+        XCTAssertNil(GTINNormalizer.normalize("12345"))
+        XCTAssertNil(GTINNormalizer.normalize("not-a-code"))
+    }
+
+    func testBarcodeDebouncerRejectsDuplicateScansInsideWindow() {
+        var debouncer = BarcodeScanDebouncer(interval: 1.5)
+        let start = Date(timeIntervalSince1970: 1_000)
+
+        XCTAssertNotNil(debouncer.shouldAccept(rawValue: "006178200002", now: start))
+        XCTAssertNil(debouncer.shouldAccept(rawValue: "006178200002", now: start.addingTimeInterval(0.5)))
+        XCTAssertNotNil(debouncer.shouldAccept(rawValue: "006178200002", now: start.addingTimeInterval(2.0)))
+    }
+
+    @MainActor
+    func testOverviewBucketsCountCurrentHistoryStatuses() {
+        let store = AppStore()
+        let buckets = store.overviewBuckets()
+
+        XCTAssertEqual(buckets.reduce(0) { $0 + $1.count }, store.history.count)
+        XCTAssertTrue(buckets.contains { $0.status == .poor && $0.count >= 1 })
+    }
+
+    func testRecommendationPairUsesSameCategoryHigherFitProduct() {
+        let profile = UserNutritionProfile(preferences: [.lowSugar, .avoidDyes], allergens: [])
+        let current = SampleCatalog.products[1]
+        let pair = SampleCatalog.recommendationPair(for: current, profile: profile)
+
+        XCTAssertNotNil(pair)
+        XCTAssertEqual(pair?.current.category, pair?.replacement.category)
+        let currentFit = ScoringEngine().score(product: current, profile: profile).optiFit.value
+        let replacementFit = ScoringEngine().score(product: pair!.replacement, profile: profile).optiFit.value
+        XCTAssertGreaterThan(replacementFit, currentFit)
+        XCTAssertFalse(pair!.reasons.isEmpty)
+    }
 }
