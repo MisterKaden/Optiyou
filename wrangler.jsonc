@@ -49,12 +49,6 @@
       "id": "83ead3db2c1c41fdb9cd2f1c272e47b8"
     }
   ],
-  "r2_buckets": [
-    {
-      "binding": "PRODUCT_ARTIFACTS",
-      "bucket_name": "optiyou-product-artifacts"
-    }
-  ],
   "queues": {
     "producers": [
       {
