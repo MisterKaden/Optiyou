@@ -38,8 +38,17 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Test
+        run: npm test
+
       - name: Validate Worker bundle
         run: npm run check
+
+      - name: Apply D1 migrations
+        if: env.HAS_CLOUDFLAREOPTI_API_TOKEN == 'true' && env.HAS_CLOUDFLARE_ACCOUNT_ID == 'true'
+        run: npx wrangler d1 migrations apply optiyou-core --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLAREOPTI_API_TOKEN }}
 
       - name: Cloudflare deploy skipped
         if: env.HAS_CLOUDFLAREOPTI_API_TOKEN != 'true' || env.HAS_CLOUDFLARE_ACCOUNT_ID != 'true'

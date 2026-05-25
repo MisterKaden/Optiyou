@@ -90,6 +90,23 @@ h1 {
   margin-top: 34px;
 }
 
+.promise-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.promise-list span {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 8px 12px;
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
 .button {
   display: inline-flex;
   min-height: 46px;
@@ -179,4 +196,3 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
-

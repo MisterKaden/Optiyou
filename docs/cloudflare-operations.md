@@ -34,7 +34,9 @@ Local deploy path:
 
 ```bash
 npm ci
+npx wrangler d1 migrations apply optiyou-core --remote
 npm run typecheck
+npm test
 npm run check
 npm run deploy
 ```
@@ -94,6 +96,41 @@ Worker routes in `wrangler.jsonc` should own web traffic for both hosts.
 - `/_health` returns a no-cache health payload.
 - `/_version` returns deployment metadata.
 - `www.optiyou.co/*` redirects to `optiyou.co/*`.
+- `POST /v1/scan` returns an instant product card for known GTINs or a missing-product contribution intent.
+- `GET /v1/methodology` returns the deterministic packaged-food scoring scope and trust rules.
+- `PUT /v1/uploads/:token` stores signed contribution uploads in R2 through the Worker.
+- `/v1/admin/*` routes require Cloudflare Access plus `x-optiyou-admin-token`.
+
+## Product Intelligence Bindings
+
+The platform bindings are declared in `wrangler.jsonc`:
+
+- D1: `DB` / `optiyou-core`
+- KV: `PRODUCT_CACHE`, `APP_CONFIG`, `METHODOLOGY_CACHE`
+- R2: `PRODUCT_ARTIFACTS` / `optiyou-product-artifacts`
+- Queues: `INGESTION_QUEUE`, `NOTIFICATION_QUEUE`
+- Analytics Engine: `SCAN_ANALYTICS`
+- Workers AI: `AI`
+- Vectorize: `PRODUCT_EVIDENCE_INDEX`
+
+Create matching Cloudflare resources before remote deploy if they do not already exist, then rerun:
+
+```bash
+npx wrangler types
+```
+
+Required Worker secrets:
+
+- `UPLOAD_SIGNING_SECRET`
+- `ADMIN_API_TOKEN`
+- `AUTH_JWT_SECRET`
+
+Optional auth claim checks:
+
+- `AUTH_JWT_ISSUER`
+- `AUTH_JWT_AUDIENCE`
+
+For local development, copy `.dev.vars.example` to `.dev.vars` and replace the placeholders. `.dev.vars` is ignored by Git.
 
 ## Development Rules
 
@@ -104,5 +141,6 @@ Worker routes in `wrangler.jsonc` should own web traffic for both hosts.
 
 ```bash
 npm run typecheck
+npm test
 npm run check
 ```

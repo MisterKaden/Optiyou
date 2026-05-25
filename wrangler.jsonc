@@ -3,7 +3,8 @@
   "name": "optiyou",
   "main": "src/index.ts",
   "account_id": "75c2ecd9fee15d06f93013c411f31aaa",
-  "compatibility_date": "2026-05-24",
+  "compatibility_date": "2026-05-25",
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": true,
   "minify": true,
@@ -16,6 +17,7 @@
   },
   "observability": {
     "enabled": true,
+    "head_sampling_rate": 1,
     "logs": {
       "enabled": true,
       "invocation_logs": true,
@@ -26,6 +28,66 @@
       "persist": true
     }
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "optiyou-core",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "PRODUCT_CACHE"
+    },
+    {
+      "binding": "APP_CONFIG"
+    },
+    {
+      "binding": "METHODOLOGY_CACHE"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PRODUCT_ARTIFACTS",
+      "bucket_name": "optiyou-product-artifacts"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "INGESTION_QUEUE",
+        "queue": "optiyou-ingestion"
+      },
+      {
+        "binding": "NOTIFICATION_QUEUE",
+        "queue": "optiyou-notifications"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "optiyou-ingestion",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "optiyou-ingestion-dlq"
+      }
+    ]
+  },
+  "analytics_engine_datasets": [
+    {
+      "binding": "SCAN_ANALYTICS",
+      "dataset": "optiyou_scans"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "vectorize": [
+    {
+      "binding": "PRODUCT_EVIDENCE_INDEX",
+      "index_name": "optiyou-product-evidence"
+    }
+  ],
   "routes": [
     {
       "pattern": "optiyou.co/*",
@@ -38,6 +100,9 @@
   ],
   "vars": {
     "ENVIRONMENT": "production",
-    "CANONICAL_HOST": "optiyou.co"
+    "CANONICAL_HOST": "optiyou.co",
+    "UPLOAD_TOKEN_TTL_SECONDS": "900",
+    "METHODOLOGY_VERSION": "food-us-ca-v1",
+    "AI_GATEWAY_BASE_URL": "https://gateway.ai.cloudflare.com/v1"
   }
 }

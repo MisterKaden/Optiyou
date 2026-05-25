@@ -8,3 +8,4 @@ coverage/
 *.log
 .playwright-mcp/
 .DS_Store
+ios/DerivedData/

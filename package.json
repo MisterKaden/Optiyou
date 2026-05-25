@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "wrangler dev",
+    "test": "node --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "wrangler deploy --dry-run --strict",
     "deploy": "wrangler deploy",
@@ -30,7 +31,7 @@
   },
   "homepage": "https://github.com/MisterKaden/Optiyou#readme",
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260524.1",
+    "@types/node": "^25.9.1",
     "typescript": "^6.0.3",
     "wrangler": "^4.94.0"
   }
