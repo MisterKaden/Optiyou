@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "optiyou",
+  "main": "src/index.ts",
+  "account_id": "75c2ecd9fee15d06f93013c411f31aaa",
+  "compatibility_date": "2026-05-24",
+  "workers_dev": true,
+  "preview_urls": true,
+  "minify": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page",
+    "run_worker_first": true
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": true,
+      "persist": true
+    }
+  },
+  "routes": [
+    {
+      "pattern": "optiyou.co/*",
+      "zone_name": "optiyou.co"
+    },
+    {
+      "pattern": "www.optiyou.co/*",
+      "zone_name": "optiyou.co"
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "production",
+    "CANONICAL_HOST": "optiyou.co"
+  }
+}

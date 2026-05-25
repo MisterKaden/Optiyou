@@ -1,0 +1,37 @@
+{
+  "name": "optiyou",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker-backed website for optiyou.co",
+  "private": true,
+  "type": "module",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "check": "wrangler deploy --dry-run --strict",
+    "deploy": "wrangler deploy",
+    "cloudflare:bootstrap": "bash scripts/bootstrap-cloudflare.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MisterKaden/Optiyou.git"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "optiyou"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/MisterKaden/Optiyou/issues"
+  },
+  "homepage": "https://github.com/MisterKaden/Optiyou#readme",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260524.1",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.94.0"
+  }
+}

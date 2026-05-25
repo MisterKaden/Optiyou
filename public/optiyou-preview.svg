@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 680" role="img" aria-labelledby="title desc">
+  <title id="title">Optiyou health signal dashboard</title>
+  <desc id="desc">A calm health optimization dashboard showing recovery, energy, sleep, and habit signals.</desc>
+  <rect width="960" height="680" fill="#f8faf7"/>
+  <rect x="46" y="42" width="868" height="596" rx="34" fill="#ffffff" stroke="#d9e2df" stroke-width="2"/>
+  <circle cx="136" cy="118" r="38" fill="#0f766e"/>
+  <path d="M119 121c10-22 26-32 48-31-4 27-19 45-47 56 3-12 10-22 20-31" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="197" y="110" fill="#18201f" font-family="Arial, sans-serif" font-size="34" font-weight="700">Optiyou</text>
+  <text x="197" y="145" fill="#61706c" font-family="Arial, sans-serif" font-size="19">Daily optimization overview</text>
+  <rect x="94" y="205" width="240" height="166" rx="20" fill="#ecf7f4"/>
+  <rect x="360" y="205" width="240" height="166" rx="20" fill="#fff6df"/>
+  <rect x="626" y="205" width="240" height="166" rx="20" fill="#f7ecf0"/>
+  <text x="122" y="252" fill="#0b4f4a" font-family="Arial, sans-serif" font-size="19" font-weight="700">Recovery</text>
+  <text x="388" y="252" fill="#805a0f" font-family="Arial, sans-serif" font-size="19" font-weight="700">Energy</text>
+  <text x="654" y="252" fill="#833448" font-family="Arial, sans-serif" font-size="19" font-weight="700">Consistency</text>
+  <text x="122" y="325" fill="#18201f" font-family="Arial, sans-serif" font-size="58" font-weight="700">86</text>
+  <text x="388" y="325" fill="#18201f" font-family="Arial, sans-serif" font-size="58" font-weight="700">72</text>
+  <text x="654" y="325" fill="#18201f" font-family="Arial, sans-serif" font-size="58" font-weight="700">91</text>
+  <text x="210" y="324" fill="#61706c" font-family="Arial, sans-serif" font-size="21">score</text>
+  <text x="476" y="324" fill="#61706c" font-family="Arial, sans-serif" font-size="21">score</text>
+  <text x="742" y="324" fill="#61706c" font-family="Arial, sans-serif" font-size="21">score</text>
+  <rect x="94" y="426" width="772" height="130" rx="20" fill="#f4f7f5" stroke="#d9e2df"/>
+  <polyline points="132,510 196,493 260,500 324,468 388,452 452,470 516,442 580,421 644,436 708,398 772,416 828,382" fill="none" stroke="#0f766e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="132,530 196,520 260,527 324,512 388,505 452,512 516,488 580,479 644,487 708,463 772,470 828,446" fill="none" stroke="#d49a24" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity=".8"/>
+  <text x="122" y="597" fill="#61706c" font-family="Arial, sans-serif" font-size="19">Sleep, stress, movement, and habit trends in one practical loop.</text>
+</svg>
+
