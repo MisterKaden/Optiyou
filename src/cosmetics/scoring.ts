@@ -131,7 +131,8 @@ function scoreHazard(counts: ConcernCounts, reasonCodes: Set<CosmeticReasonCode>
     advisories.push("Contains use-restricted actives — follow the product's usage directions.");
   }
   if (counts.contested > 0) {
-    score -= Math.min(8, 4 * counts.contested);
+    // House stance: contested items inform via advisory; they do NOT move the score on their own
+    // (and several, like UV filters, are already counted under endocrine_suspected — no double-dip).
     reasonCodes.add("COS_CONTESTED_INGREDIENT");
     advisories.push("Contains an ingredient whose safety is genuinely debated (e.g. a chemical UV filter); the evidence is not settled.");
   }

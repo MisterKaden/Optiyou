@@ -165,7 +165,7 @@ export async function findProductByGtin(env: Env, gtin: string): Promise<FoodPro
       ), 0.58) AS data_confidence
     FROM products p
     JOIN product_versions pv ON pv.id = p.current_version_id
-    WHERE p.gtin = ?
+    WHERE p.gtin = ? AND p.vertical = 'food'
     LIMIT 1
   `).bind(gtin).first<ProductRow>();
 
@@ -209,7 +209,7 @@ export async function searchProducts(env: Env, query: string, limit = 20): Promi
       ), 0.58) AS data_confidence
     FROM products p
     JOIN product_versions pv ON pv.id = p.current_version_id
-    WHERE p.gtin LIKE ? OR pv.name LIKE ? OR pv.brand LIKE ? OR p.category LIKE ?
+    WHERE p.vertical = 'food' AND (p.gtin LIKE ? OR pv.name LIKE ? OR pv.brand LIKE ? OR p.category LIKE ?)
     ORDER BY
       CASE
         WHEN p.gtin = ? THEN 0
@@ -318,7 +318,7 @@ export async function listAlternatives(env: Env, product: FoodProduct): Promise<
     JOIN products p ON p.id = a.product_id
     JOIN products alt ON alt.id = a.alternative_product_id
     JOIN product_versions pv ON pv.id = alt.current_version_id
-    WHERE p.gtin = ? AND a.paid_placement = 0
+    WHERE p.gtin = ? AND a.paid_placement = 0 AND alt.vertical = 'food'
     LIMIT 3
   `).bind(product.gtin).all<ProductRow>();
 
@@ -605,17 +605,19 @@ export async function listEvidenceCards(
   filter: { reviewStatus?: string; domain?: string; limit?: number } = {}
 ): Promise<EvidenceCardRow[]> {
   const limit = Math.min(Math.max(filter.limit ?? 50, 1), 200);
+  const reviewStatus = filter.reviewStatus ?? null;
+  const domain = filter.domain ?? null;
   const rows = await env.DB.prepare(`
     SELECT ie.id, ik.canonical_name, ie.domain, ie.concern_level, ie.evidence_tier, ie.evidence_status,
            ie.reason_code, ie.magnitude_band, ie.contested, ie.review_status, ie.needs_human_verification,
            ie.created_at
     FROM ingredient_evidence ie
     JOIN ingredient_knowledge ik ON ik.id = ie.ingredient_id
-    WHERE (?1 IS NULL OR ie.review_status = ?1)
-      AND (?2 IS NULL OR ie.domain = ?2)
+    WHERE (? IS NULL OR ie.review_status = ?)
+      AND (? IS NULL OR ie.domain = ?)
     ORDER BY ie.created_at DESC
     LIMIT ${limit}
-  `).bind(filter.reviewStatus ?? null, filter.domain ?? null).all<RawEvidenceRow>();
+  `).bind(reviewStatus, reviewStatus, domain, domain).all<RawEvidenceRow>();
 
   return rows.results.map((row) => ({
     id: row.id,
@@ -641,7 +643,14 @@ async function groupCount(env: Env, sql: string): Promise<Record<string, number>
       out[row.k ?? "unknown"] = Number(row.c) || 0;
     }
     return out;
-  } catch {
+  } catch (error) {
+    // Don't fail the whole metrics snapshot on one bad query, but make the failure visible rather
+    // than reporting a silent zero that looks like genuinely empty data.
+    console.error(JSON.stringify({
+      level: "error",
+      event: "admin_metrics_group_count_failed",
+      message: error instanceof Error ? error.message : "Unknown error"
+    }));
     return {};
   }
 }

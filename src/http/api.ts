@@ -32,7 +32,7 @@ interface RuntimeContext {
 }
 
 interface ProductAnalytics {
-  outcome: "known" | "missing" | "estimated";
+  outcome: "known" | "missing" | "estimated" | "pending_verification";
   gtin: string;
   userId: string;
   optiScore?: number;
@@ -175,6 +175,10 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
   if (!visible && !user.isAdmin) {
     // The product exists but is not yet verified: show a "still verifying" state and invite a label
     // photo so the crowd can confirm it. Never leak the provisional card to a regular user.
+    // TODO(contrib-dedup): createContributionShell inserts a fresh contribution + uploads on every
+    // call, so repeat scans of the same unverified product accumulate duplicate open contributions
+    // (also true of the missing-product path). Needs a "reuse open contribution for (user, product)"
+    // guard that preserves the signed upload-token flow — do with integration tests, not unattended.
     const intent = await createMissingProductIntent(request, env, user.id, body.gtin, profile.id);
     await createContributionShell(env, intent, user.id);
     ctx.waitUntil(recordScan(env, {
@@ -185,7 +189,7 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
       scanSource: body.source ?? "barcode",
       resultStatus: "pending_verification"
     }));
-    ctx.waitUntil(writeScanAnalytics(env, { outcome: "estimated", gtin: body.gtin, userId: user.id }));
+    ctx.waitUntil(writeScanAnalytics(env, { outcome: "pending_verification", gtin: body.gtin, userId: user.id }));
     return jsonResponse({
       status: "pending_verification",
       gtin: body.gtin,

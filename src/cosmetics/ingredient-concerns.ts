@@ -19,7 +19,9 @@ const CONCERN_KEYWORDS: Record<CosmeticConcernType, string[]> = {
     "hydroquinone", "salicylic acid", "retinol", "retinoic acid", "selenium sulfide",
     "aluminum chlorohydrate", "thioglycolate"
   ],
-  cmr: ["coal tar", "toluene", "benzene", "formaldehyde", "1,4-dioxane"],
+  // "dioxane" (not "1,4-dioxane") because INCI tokens are comma-split before matching, so a literal
+  // comma in a keyword can never match.
+  cmr: ["coal tar", "toluene", "benzene", "formaldehyde", "dioxane"],
   formaldehyde_releaser: [
     "dmdm hydantoin", "diazolidinyl urea", "imidazolidinyl urea", "quaternium-15",
     "sodium hydroxymethylglycinate", "bronopol", "2-bromo-2-nitropropane"
