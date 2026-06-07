@@ -13,6 +13,7 @@ import {
   createContributionShell,
   ensureUser,
   findProductByGtin,
+  getAdminMetrics,
   listAlternatives,
   listContributionReviewQueue,
   listScanHistory,
@@ -415,6 +416,10 @@ async function handleAdmin(request: Request, env: Env, url: URL): Promise<Respon
 
   if (request.method === "GET" && url.pathname === "/v1/admin/review-queue") {
     return jsonResponse({ queue: await listContributionReviewQueue(env) });
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/admin/metrics") {
+    return jsonResponse({ metrics: await getAdminMetrics(env), generatedAt: new Date().toISOString() });
   }
 
   const contributionMatch = /^\/v1\/admin\/contributions\/([^/]+)$/.exec(url.pathname);

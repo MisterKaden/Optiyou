@@ -541,6 +541,47 @@ export async function recordScan(
   ).run();
 }
 
+export interface AdminMetrics {
+  products: { total: number; byVertical: Record<string, number>; byVerification: Record<string, number> };
+  scores: { foodByBand: Record<string, number>; cosmeticByBand: Record<string, number> };
+  contributions: { byStatus: Record<string, number> };
+  scans: { byResult: Record<string, number> };
+}
+
+// Optimization-metrics snapshot for the admin dashboard, derived from D1 (no Analytics Engine
+// dependency). Coverage, data-quality, score health, contribution funnel, scan outcomes.
+export async function getAdminMetrics(env: Env): Promise<AdminMetrics> {
+  const [byVertical, byVerification, foodByBand, cosmeticByBand, contributionsByStatus, scansByResult] = await Promise.all([
+    groupCount(env, "SELECT vertical AS k, COUNT(*) AS c FROM products GROUP BY vertical"),
+    groupCount(env, "SELECT verification_status AS k, COUNT(*) AS c FROM products GROUP BY verification_status"),
+    groupCount(env, "SELECT grade_band AS k, COUNT(*) AS c FROM scores WHERE grade_band IS NOT NULL GROUP BY grade_band"),
+    groupCount(env, "SELECT grade_band AS k, COUNT(*) AS c FROM cosmetic_scores GROUP BY grade_band"),
+    groupCount(env, "SELECT status AS k, COUNT(*) AS c FROM contributions GROUP BY status"),
+    groupCount(env, "SELECT result_status AS k, COUNT(*) AS c FROM scan_history GROUP BY result_status")
+  ]);
+
+  const total = Object.values(byVertical).reduce((sum, count) => sum + count, 0);
+  return {
+    products: { total, byVertical, byVerification },
+    scores: { foodByBand, cosmeticByBand },
+    contributions: { byStatus: contributionsByStatus },
+    scans: { byResult: scansByResult }
+  };
+}
+
+async function groupCount(env: Env, sql: string): Promise<Record<string, number>> {
+  try {
+    const rows = await env.DB.prepare(sql).all<{ k: string | null; c: number }>();
+    const out: Record<string, number> = {};
+    for (const row of rows.results) {
+      out[row.k ?? "unknown"] = Number(row.c) || 0;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 async function loadProductFromRow(env: Env, row: ProductRow): Promise<FoodProduct> {
   const nutrition = await env.DB.prepare(`
     SELECT calories, added_sugar_grams, protein_grams, fiber_grams, sodium_milligrams

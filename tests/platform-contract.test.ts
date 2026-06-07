@@ -314,6 +314,24 @@ test("requireAdminAccess grants via the Apple Sign-In admin role and rejects ano
   );
 });
 
+test("admin metrics endpoint is role-gated and returns a metrics snapshot", async () => {
+  const db = createFakeD1();
+  const env = { ...authEnv(), ADMIN_USER_IDS: "apple:001.admin", DB: db.database } as unknown as Env;
+  const adminToken = await signJwt({ sub: "apple:001.admin", iss: "optiyou-test", aud: "optiyou-ios", exp: Math.floor(Date.now() / 1000) + 600, token_use: "optiyou_access" }, "test-secret");
+
+  const ok = await handleApiRequest(new Request("https://optiyou.test/v1/admin/metrics", {
+    headers: { authorization: `Bearer ${adminToken}` }
+  }), env, noopCtx());
+  assert.equal(ok.status, 200);
+  const body = await ok.json() as { metrics: { products: { total: number; byVertical: Record<string, number> }; scans: { byResult: Record<string, number> } } };
+  assert.equal(typeof body.metrics.products.total, "number");
+  assert.ok(body.metrics.products.byVertical);
+  assert.ok(body.metrics.scans.byResult);
+
+  const denied = await handleApiRequest(new Request("https://optiyou.test/v1/admin/metrics"), env, noopCtx());
+  assert.equal(denied.status, 403);
+});
+
 test("scan cache gate serves an admin_only card to an admin and labels its visibility", async () => {
   const hiddenProduct: FoodProduct = {
     ...cereal,
