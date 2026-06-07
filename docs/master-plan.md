@@ -150,6 +150,13 @@ Principles locked here:
   data, and the review queue. Enforced **server-side** — the API only honors an `includeUnverified`
   flag for authenticated admins; it is not merely hidden in the UI.
 
+**Implemented (v0.1):** `src/platform/visibility.ts` — a product is user-visible if
+`verificationStatus === "verified"` OR (`unverified` AND `confidence ≥ 0.7`); `conflicted`/
+`needs_review` are admin-only. The scan endpoint returns a `pending_verification` + contribution
+prompt for hidden products; lists filter them; only visible cards are cached. Admin is a **role on
+Apple Sign-In** (`src/platform/auth.ts` `requireAdminAccess`), granted by the `ADMIN_USER_IDS` /
+`ADMIN_EMAILS` allowlists, with the legacy `ADMIN_API_TOKEN` as a transitional fallback.
+
 ---
 
 ## 6. The four-database architecture

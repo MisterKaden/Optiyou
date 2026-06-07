@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { handleApiRequest } from "../src/http/api.ts";
 import { HttpError } from "../src/http/responses.ts";
-import { requireUser } from "../src/platform/auth.ts";
+import { requireAdminAccess, requireUser } from "../src/platform/auth.ts";
 import { createContributionShell, loadProfile, markUploadReceived } from "../src/platform/repository.ts";
 import { buildProductCard } from "../src/products/product-card.ts";
 import { buildContributionIntent } from "../src/contributions/contribution-intent.ts";
@@ -279,6 +279,67 @@ test("protected endpoints reject anonymous install tokens and raw Apple identity
     }), env),
     (error) => error instanceof HttpError && error.status === 401 && error.code === "auth_invalid"
   );
+});
+
+test("admin role is granted by the ADMIN_USER_IDS allowlist and denied otherwise", async () => {
+  const env = { ...authEnv(), ADMIN_USER_IDS: "apple:001.admin, seed-user" } as unknown as Env;
+  const claims = (sub: string) => ({ sub, iss: "optiyou-test", aud: "optiyou-ios", exp: Math.floor(Date.now() / 1000) + 600, token_use: "optiyou_access" });
+
+  const adminToken = await signJwt(claims("apple:001.admin"), "test-secret");
+  const adminUser = await requireUser(new Request("https://optiyou.test/v1/scan", { headers: { authorization: `Bearer ${adminToken}` } }), env);
+  assert.equal(adminUser.isAdmin, true);
+
+  const plainToken = await signJwt(claims("apple:002.user"), "test-secret");
+  const plainUser = await requireUser(new Request("https://optiyou.test/v1/scan", { headers: { authorization: `Bearer ${plainToken}` } }), env);
+  assert.equal(plainUser.isAdmin, false);
+});
+
+test("admin role can also be granted by the ADMIN_EMAILS allowlist (case-insensitive)", async () => {
+  const env = { ...authEnv(), ADMIN_EMAILS: "boss@optiyou.co" } as unknown as Env;
+  const token = await signJwt({ sub: "apple:003.user", email: "Boss@optiyou.co", iss: "optiyou-test", aud: "optiyou-ios", exp: Math.floor(Date.now() / 1000) + 600, token_use: "optiyou_access" }, "test-secret");
+  const user = await requireUser(new Request("https://optiyou.test/v1/scan", { headers: { authorization: `Bearer ${token}` } }), env);
+  assert.equal(user.isAdmin, true);
+});
+
+test("requireAdminAccess grants via the Apple Sign-In admin role and rejects anonymous callers", async () => {
+  const env = { ...authEnv(), ADMIN_USER_IDS: "apple:001.admin" } as unknown as Env;
+  const token = await signJwt({ sub: "apple:001.admin", iss: "optiyou-test", aud: "optiyou-ios", exp: Math.floor(Date.now() / 1000) + 600, token_use: "optiyou_access" }, "test-secret");
+  const access = await requireAdminAccess(new Request("https://optiyou.test/v1/admin/review-queue", { headers: { authorization: `Bearer ${token}` } }), env);
+  assert.equal(access.via, "role");
+  assert.equal(access.actorId, "apple:001.admin");
+
+  await assert.rejects(
+    requireAdminAccess(new Request("https://optiyou.test/v1/admin/review-queue"), env),
+    (error) => error instanceof HttpError && error.status === 403
+  );
+});
+
+test("scan cache gate serves an admin_only card to an admin and labels its visibility", async () => {
+  const hiddenProduct: FoodProduct = {
+    ...cereal,
+    dataQuality: { ...cereal.dataQuality, confidence: 0.4, verificationStatus: "unverified" }
+  };
+  const hiddenCard = buildProductCard({ product: hiddenProduct, profile: lowSugarProfile, alternatives: [] });
+  const db = createFakeD1();
+  const adminToken = await signJwt({ sub: "apple:001.admin", iss: "optiyou-test", aud: "optiyou-ios", exp: Math.floor(Date.now() / 1000) + 600, token_use: "optiyou_access" }, "test-secret");
+  const env = {
+    ...authEnv(),
+    ADMIN_USER_IDS: "apple:001.admin",
+    PRODUCT_CACHE: { get: async () => JSON.stringify(hiddenCard), put: async () => undefined },
+    DB: db.database,
+    SCAN_ANALYTICS: { writeDataPoint: () => undefined }
+  } as unknown as Env;
+
+  const response = await handleApiRequest(new Request("https://optiyou.test/v1/scan", {
+    method: "POST",
+    headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ gtin: cereal.gtin, profile: lowSugarProfile })
+  }), env, noopCtx());
+
+  assert.equal(response.status, 200);
+  const body = await response.json() as { visibility: string; scores: { optiScore: number } };
+  assert.equal(body.visibility, "admin_only");
+  assert.equal(typeof body.scores.optiScore, "number");
 });
 
 test("cached scan responses still write scan history", async () => {
