@@ -569,6 +569,70 @@ export async function getAdminMetrics(env: Env): Promise<AdminMetrics> {
   };
 }
 
+export interface EvidenceCardRow {
+  id: string;
+  ingredientName: string;
+  domain: string;
+  concernLevel: string;
+  evidenceTier: string;
+  evidenceStatus: string;
+  reasonCode: string | null;
+  magnitudeBand: string;
+  contested: boolean;
+  reviewStatus: string;
+  needsHumanVerification: boolean;
+  createdAt: string;
+}
+
+interface RawEvidenceRow {
+  id: string;
+  canonical_name: string;
+  domain: string;
+  concern_level: string;
+  evidence_tier: string;
+  evidence_status: string;
+  reason_code: string | null;
+  magnitude_band: string;
+  contested: number;
+  review_status: string;
+  needs_human_verification: number;
+  created_at: string;
+}
+
+// Admin review surface for ATLAS Evidence Cards (the audit half of autonomous-ATLAS-with-audit).
+export async function listEvidenceCards(
+  env: Env,
+  filter: { reviewStatus?: string; domain?: string; limit?: number } = {}
+): Promise<EvidenceCardRow[]> {
+  const limit = Math.min(Math.max(filter.limit ?? 50, 1), 200);
+  const rows = await env.DB.prepare(`
+    SELECT ie.id, ik.canonical_name, ie.domain, ie.concern_level, ie.evidence_tier, ie.evidence_status,
+           ie.reason_code, ie.magnitude_band, ie.contested, ie.review_status, ie.needs_human_verification,
+           ie.created_at
+    FROM ingredient_evidence ie
+    JOIN ingredient_knowledge ik ON ik.id = ie.ingredient_id
+    WHERE (?1 IS NULL OR ie.review_status = ?1)
+      AND (?2 IS NULL OR ie.domain = ?2)
+    ORDER BY ie.created_at DESC
+    LIMIT ${limit}
+  `).bind(filter.reviewStatus ?? null, filter.domain ?? null).all<RawEvidenceRow>();
+
+  return rows.results.map((row) => ({
+    id: row.id,
+    ingredientName: row.canonical_name,
+    domain: row.domain,
+    concernLevel: row.concern_level,
+    evidenceTier: row.evidence_tier,
+    evidenceStatus: row.evidence_status,
+    reasonCode: row.reason_code,
+    magnitudeBand: row.magnitude_band,
+    contested: row.contested === 1,
+    reviewStatus: row.review_status,
+    needsHumanVerification: row.needs_human_verification === 1,
+    createdAt: row.created_at
+  }));
+}
+
 async function groupCount(env: Env, sql: string): Promise<Record<string, number>> {
   try {
     const rows = await env.DB.prepare(sql).all<{ k: string | null; c: number }>();

@@ -16,6 +16,7 @@ import {
   getAdminMetrics,
   listAlternatives,
   listContributionReviewQueue,
+  listEvidenceCards,
   listScanHistory,
   loadProfile,
   markUploadReceived,
@@ -420,6 +421,14 @@ async function handleAdmin(request: Request, env: Env, url: URL): Promise<Respon
 
   if (request.method === "GET" && url.pathname === "/v1/admin/metrics") {
     return jsonResponse({ metrics: await getAdminMetrics(env), generatedAt: new Date().toISOString() });
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/admin/evidence") {
+    const cards = await listEvidenceCards(env, {
+      reviewStatus: url.searchParams.get("status") ?? undefined,
+      domain: url.searchParams.get("domain") ?? undefined
+    });
+    return jsonResponse({ cards });
   }
 
   const contributionMatch = /^\/v1\/admin\/contributions\/([^/]+)$/.exec(url.pathname);

@@ -332,6 +332,22 @@ test("admin metrics endpoint is role-gated and returns a metrics snapshot", asyn
   assert.equal(denied.status, 403);
 });
 
+test("admin evidence review endpoint is role-gated and returns a card list", async () => {
+  const db = createFakeD1();
+  const env = { ...authEnv(), ADMIN_USER_IDS: "apple:001.admin", DB: db.database } as unknown as Env;
+  const adminToken = await signJwt({ sub: "apple:001.admin", iss: "optiyou-test", aud: "optiyou-ios", exp: Math.floor(Date.now() / 1000) + 600, token_use: "optiyou_access" }, "test-secret");
+
+  const ok = await handleApiRequest(new Request("https://optiyou.test/v1/admin/evidence?status=draft", {
+    headers: { authorization: `Bearer ${adminToken}` }
+  }), env, noopCtx());
+  assert.equal(ok.status, 200);
+  const body = await ok.json() as { cards: unknown[] };
+  assert.ok(Array.isArray(body.cards));
+
+  const denied = await handleApiRequest(new Request("https://optiyou.test/v1/admin/evidence"), env, noopCtx());
+  assert.equal(denied.status, 403);
+});
+
 test("scan cache gate serves an admin_only card to an admin and labels its visibility", async () => {
   const hiddenProduct: FoodProduct = {
     ...cereal,
