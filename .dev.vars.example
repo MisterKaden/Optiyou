@@ -1,5 +1,10 @@
 UPLOAD_SIGNING_SECRET=replace-with-local-random-secret
+# Legacy/transitional static admin token. Prefer the admin role allowlists below.
 ADMIN_API_TOKEN=replace-with-local-admin-token
+# Admin role on Apple Sign-In (server-enforced). Comma-separated; either grants admin.
+# IDs are Optiyou subjects, e.g. "apple:001.xxxx" or a dev/seed id like "seed-user".
+ADMIN_USER_IDS=
+ADMIN_EMAILS=
 AUTH_JWT_SECRET=replace-with-local-jwt-hs256-secret
 AUTH_JWT_ISSUER=https://optiyou.local
 AUTH_JWT_AUDIENCE=optiyou-ios

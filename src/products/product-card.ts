@@ -17,6 +17,9 @@ interface BuildProductCardInput {
 
 export function buildProductCard(input: BuildProductCardInput): ProductCard {
   const score = scoreFoodProduct(input.product, input.profile);
+  // The score object keeps universal and personalization reasons separate; the card presents the
+  // combined view (a user wants both "high added sugar" and "conflicts with your low-sugar goal").
+  const reasonCodes = [...score.reasonCodes, ...score.personalizationReasonCodes];
 
   return {
     status: input.status ?? "known",
@@ -29,10 +32,10 @@ export function buildProductCard(input: BuildProductCardInput): ProductCard {
       source: input.product.dataQuality.source,
       fieldLevelRequired: true
     },
-    reasonCodes: score.reasonCodes,
+    reasonCodes,
     explanation: {
-      summary: input.explanation?.summary ?? defaultExplanation(score.reasonCodes),
-      claimMap: input.explanation?.claimMap ?? score.reasonCodes.map((reason) => ({
+      summary: input.explanation?.summary ?? defaultExplanation(reasonCodes),
+      claimMap: input.explanation?.claimMap ?? reasonCodes.map((reason) => ({
         claim: reasonToPlainEnglish(reason),
         source: "score_reason",
         ref: reason

@@ -4,16 +4,19 @@ import { scoreFoodProduct, FOOD_METHODOLOGY_VERSION } from "../scoring/food-scor
 import {
   createAppleSignInNonce,
   exchangeAppleIdentityToken,
-  requireAdmin,
+  requireAdminAccess,
   requireUser,
   readSecret
 } from "../platform/auth.ts";
+import { includeUnverified, isUserVisible, visibilityLabel } from "../platform/visibility.ts";
 import {
   createContributionShell,
   ensureUser,
   findProductByGtin,
+  getAdminMetrics,
   listAlternatives,
   listContributionReviewQueue,
+  listEvidenceCards,
   listScanHistory,
   loadProfile,
   markUploadReceived,
@@ -29,7 +32,7 @@ interface RuntimeContext {
 }
 
 interface ProductAnalytics {
-  outcome: "known" | "missing" | "estimated";
+  outcome: "known" | "missing" | "estimated" | "pending_verification";
   gtin: string;
   userId: string;
   optiScore?: number;
@@ -138,15 +141,19 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
 
   if (cached) {
     const card = JSON.parse(cached) as ProductCard;
-    ctx.waitUntil(recordKnownScan(env, user.id, persistedProfileId, body.gtin, body.source ?? "barcode", card));
-    ctx.waitUntil(writeScanAnalytics(env, {
-      outcome: "known",
-      gtin: body.gtin,
-      userId: user.id,
-      optiScore: card.scores.optiScore,
-      optiFit: card.scores.optiFit
-    }));
-    return jsonResponse({ ...card, cache: "kv-hit" });
+    // Only an admin may receive a cached card that is not user-visible (only visible cards are
+    // cached, but this guards against stale entries if the threshold changes).
+    if (user.isAdmin || isUserVisible(card.product)) {
+      ctx.waitUntil(recordKnownScan(env, user.id, persistedProfileId, body.gtin, body.source ?? "barcode", card));
+      ctx.waitUntil(writeScanAnalytics(env, {
+        outcome: "known",
+        gtin: body.gtin,
+        userId: user.id,
+        optiScore: card.scores.optiScore,
+        optiFit: card.scores.optiFit
+      }));
+      return jsonResponse({ ...card, cache: "kv-hit", visibility: visibilityLabel(card.product) });
+    }
   }
 
   const product = await findProductByGtin(env, body.gtin);
@@ -164,6 +171,33 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
     return jsonResponse(intent, { status: 202 });
   }
 
+  const visible = isUserVisible(product);
+  if (!visible && !user.isAdmin) {
+    // The product exists but is not yet verified: show a "still verifying" state and invite a label
+    // photo so the crowd can confirm it. Never leak the provisional card to a regular user.
+    // TODO(contrib-dedup): createContributionShell inserts a fresh contribution + uploads on every
+    // call, so repeat scans of the same unverified product accumulate duplicate open contributions
+    // (also true of the missing-product path). Needs a "reuse open contribution for (user, product)"
+    // guard that preserves the signed upload-token flow — do with integration tests, not unattended.
+    const intent = await createMissingProductIntent(request, env, user.id, body.gtin, profile.id);
+    await createContributionShell(env, intent, user.id);
+    ctx.waitUntil(recordScan(env, {
+      userId: user.id,
+      profileId: persistedProfileId,
+      productId: product.id,
+      gtin: body.gtin,
+      scanSource: body.source ?? "barcode",
+      resultStatus: "pending_verification"
+    }));
+    ctx.waitUntil(writeScanAnalytics(env, { outcome: "pending_verification", gtin: body.gtin, userId: user.id }));
+    return jsonResponse({
+      status: "pending_verification",
+      gtin: body.gtin,
+      message: "We're still verifying this product. Add a photo of the label to help us confirm it.",
+      contribution: intent
+    }, { status: 202 });
+  }
+
   const alternatives = await listAlternatives(env, product);
   const card = buildProductCard({
     product,
@@ -172,7 +206,10 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
     explanation: explanationFromReasonCodes(product)
   });
 
-  ctx.waitUntil(env.PRODUCT_CACHE.put(cacheKey, JSON.stringify(card), { expirationTtl: 60 * 60 }));
+  // Only cache user-visible cards so the visibility gate cannot be bypassed through the cache.
+  if (visible) {
+    ctx.waitUntil(env.PRODUCT_CACHE.put(cacheKey, JSON.stringify(card), { expirationTtl: 60 * 60 }));
+  }
   ctx.waitUntil(recordScan(env, {
     userId: user.id,
     profileId: persistedProfileId,
@@ -191,7 +228,7 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
     optiFit: card.scores.optiFit
   }));
 
-  return jsonResponse({ ...card, cache: "miss-filled" });
+  return jsonResponse({ ...card, cache: "miss-filled", visibility: visibilityLabel(product) });
 }
 
 async function recordKnownScan(
@@ -215,16 +252,18 @@ async function recordKnownScan(
 }
 
 async function handleProductSearch(request: Request, env: Env, url: URL): Promise<Response> {
-  await requireUser(request, env);
+  const user = await requireUser(request, env);
   const query = url.searchParams.get("query") ?? "";
   const limitValue = Number.parseInt(url.searchParams.get("limit") ?? "20", 10);
   const products = await searchProducts(env, query, Number.isFinite(limitValue) ? limitValue : 20);
+  // Non-admins only see user-visible products; admins see all unless they opt into the user view.
+  const results = includeUnverified(user.isAdmin, url) ? products : products.filter(isUserVisible);
 
-  return jsonResponse({ products });
+  return jsonResponse({ products: results });
 }
 
 async function handleProductLookup(request: Request, env: Env, url: URL): Promise<Response> {
-  await requireUser(request, env);
+  const user = await requireUser(request, env);
   const gtin = url.pathname.split("/").at(-1);
   if (!gtin) {
     throw new HttpError(400, "gtin_required", "Product lookup requires a GTIN.");
@@ -235,7 +274,11 @@ async function handleProductLookup(request: Request, env: Env, url: URL): Promis
     return errorResponse(404, "product_missing", "No product exists for this GTIN yet.");
   }
 
-  return jsonResponse({ product });
+  if (!isUserVisible(product) && !user.isAdmin) {
+    return jsonResponse({ product: null, status: "pending_verification", gtin }, { status: 200 });
+  }
+
+  return jsonResponse({ product, visibility: visibilityLabel(product) });
 }
 
 async function handleAppleNonce(env: Env): Promise<Response> {
@@ -253,7 +296,8 @@ async function handleAppleSignIn(request: Request, env: Env): Promise<Response> 
     authentication: "apple",
     user: {
       id: session.user.id,
-      email: session.user.email
+      email: session.user.email,
+      isAdmin: session.user.isAdmin
     }
   });
 }
@@ -373,10 +417,22 @@ function handleMethodology(): Response {
 }
 
 async function handleAdmin(request: Request, env: Env, url: URL): Promise<Response> {
-  await requireAdmin(request, env);
+  const admin = await requireAdminAccess(request, env);
 
   if (request.method === "GET" && url.pathname === "/v1/admin/review-queue") {
     return jsonResponse({ queue: await listContributionReviewQueue(env) });
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/admin/metrics") {
+    return jsonResponse({ metrics: await getAdminMetrics(env), generatedAt: new Date().toISOString() });
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/admin/evidence") {
+    const cards = await listEvidenceCards(env, {
+      reviewStatus: url.searchParams.get("status") ?? undefined,
+      domain: url.searchParams.get("domain") ?? undefined
+    });
+    return jsonResponse({ cards });
   }
 
   const contributionMatch = /^\/v1\/admin\/contributions\/([^/]+)$/.exec(url.pathname);
@@ -386,7 +442,7 @@ async function handleAdmin(request: Request, env: Env, url: URL): Promise<Respon
       contributionId: decodeURIComponent(contributionMatch[1]),
       status: body.status,
       notes: body.notes,
-      actorId: "admin"
+      actorId: admin.actorId
     });
 
     return jsonResponse({ review });

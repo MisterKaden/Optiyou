@@ -4,6 +4,7 @@ export interface AuthenticatedUser {
   id: string;
   email?: string;
   token: string;
+  isAdmin: boolean;
 }
 
 export interface AppleSignInNonce {
@@ -80,10 +81,12 @@ export async function requireUser(request: Request, env: Env): Promise<Authentic
     throw new HttpError(401, "auth_invalid_subject", "Bearer token subject is invalid.");
   }
 
+  const email = typeof payload.email === "string" && payload.email.includes("@") ? payload.email : undefined;
   return {
     id,
-    email: typeof payload.email === "string" && payload.email.includes("@") ? payload.email : undefined,
-    token
+    email,
+    token,
+    isAdmin: isAdminIdentity(id, email, env)
   };
 }
 
@@ -135,10 +138,13 @@ export async function exchangeAppleIdentityToken(
     throw new HttpError(401, "auth_invalid_subject", "Apple identity token subject is invalid.");
   }
 
+  const appleId = `apple:${rawAppleUserId}`;
+  const email = typeof payload.email === "string" && payload.email.includes("@") ? payload.email : undefined;
   const user: AuthenticatedUser = {
-    id: `apple:${rawAppleUserId}`,
-    email: typeof payload.email === "string" && payload.email.includes("@") ? payload.email : undefined,
-    token: input.identityToken
+    id: appleId,
+    email,
+    token: input.identityToken,
+    isAdmin: isAdminIdentity(appleId, email, env)
   };
 
   return issueAuthSession(user, env, now);
@@ -175,12 +181,54 @@ export async function issueAuthSession(user: AuthenticatedUser, env: Env, now = 
   };
 }
 
-export async function requireAdmin(request: Request, env: Env): Promise<void> {
+export interface AdminAccess {
+  actorId: string;
+  via: "role" | "token";
+}
+
+// Admin access is granted by the Apple Sign-In admin role (server-enforced via the ADMIN_USER_IDS /
+// ADMIN_EMAILS allowlist), with the legacy static admin token kept as a transitional fallback.
+export async function requireAdminAccess(request: Request, env: Env): Promise<AdminAccess> {
+  let user: AuthenticatedUser | null = null;
+  try {
+    user = await requireUser(request, env);
+  } catch {
+    user = null;
+  }
+  if (user?.isAdmin) {
+    return { actorId: user.id, via: "role" };
+  }
+
   const expected = readSecret(env, "ADMIN_API_TOKEN");
   const provided = request.headers.get("x-optiyou-admin-token");
-  if (!expected || !provided || !(await timingSafeEqual(provided, expected))) {
-    throw new HttpError(403, "admin_forbidden", "Admin access requires Cloudflare Access plus the admin API token.");
+  if (expected && provided && (await timingSafeEqual(provided, expected))) {
+    return { actorId: "admin", via: "token" };
   }
+
+  throw new HttpError(403, "admin_forbidden", "Admin access requires an Optiyou admin account or the admin API token.");
+}
+
+function isAdminIdentity(id: string, email: string | undefined, env: Env): boolean {
+  const ids = parseAllowlist(readEnvString(env, "ADMIN_USER_IDS"));
+  if (ids.has(id.toLowerCase())) {
+    return true;
+  }
+  if (email) {
+    const emails = parseAllowlist(readEnvString(env, "ADMIN_EMAILS"));
+    if (emails.has(email.toLowerCase())) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function parseAllowlist(value: string | null): Set<string> {
+  return new Set(
+    (value ?? "")
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => entry.length > 0)
+  );
 }
 
 export function readSecret(env: Env, name: string): string | null {
@@ -218,16 +266,14 @@ async function localDevelopmentUser(token: string, env: Env): Promise<Authentica
 
   const devToken = readSecret(env, "DEV_AUTH_TOKEN");
   if (devToken && await timingSafeEqual(token, devToken)) {
-    return {
-      id: readEnvString(env, "DEV_AUTH_USER_ID") ?? "seed-user",
-      token
-    };
+    const id = readEnvString(env, "DEV_AUTH_USER_ID") ?? "seed-user";
+    return { id, token, isAdmin: isAdminIdentity(id, undefined, env) };
   }
 
   if (token.startsWith("dev:")) {
     const id = token.slice("dev:".length).trim();
     if (/^[a-zA-Z0-9._:-]{3,160}$/.test(id)) {
-      return { id, token };
+      return { id, token, isAdmin: isAdminIdentity(id, undefined, env) };
     }
   }
 

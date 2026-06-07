@@ -165,7 +165,7 @@ export async function findProductByGtin(env: Env, gtin: string): Promise<FoodPro
       ), 0.58) AS data_confidence
     FROM products p
     JOIN product_versions pv ON pv.id = p.current_version_id
-    WHERE p.gtin = ?
+    WHERE p.gtin = ? AND p.vertical = 'food'
     LIMIT 1
   `).bind(gtin).first<ProductRow>();
 
@@ -209,7 +209,7 @@ export async function searchProducts(env: Env, query: string, limit = 20): Promi
       ), 0.58) AS data_confidence
     FROM products p
     JOIN product_versions pv ON pv.id = p.current_version_id
-    WHERE p.gtin LIKE ? OR pv.name LIKE ? OR pv.brand LIKE ? OR p.category LIKE ?
+    WHERE p.vertical = 'food' AND (p.gtin LIKE ? OR pv.name LIKE ? OR pv.brand LIKE ? OR p.category LIKE ?)
     ORDER BY
       CASE
         WHEN p.gtin = ? THEN 0
@@ -318,7 +318,7 @@ export async function listAlternatives(env: Env, product: FoodProduct): Promise<
     JOIN products p ON p.id = a.product_id
     JOIN products alt ON alt.id = a.alternative_product_id
     JOIN product_versions pv ON pv.id = alt.current_version_id
-    WHERE p.gtin = ? AND a.paid_placement = 0
+    WHERE p.gtin = ? AND a.paid_placement = 0 AND alt.vertical = 'food'
     LIMIT 3
   `).bind(product.gtin).all<ProductRow>();
 
@@ -539,6 +539,120 @@ export async function recordScan(
     input.optiScore ?? null,
     input.optiFit ?? null
   ).run();
+}
+
+export interface AdminMetrics {
+  products: { total: number; byVertical: Record<string, number>; byVerification: Record<string, number> };
+  scores: { foodByBand: Record<string, number>; cosmeticByBand: Record<string, number> };
+  contributions: { byStatus: Record<string, number> };
+  scans: { byResult: Record<string, number> };
+}
+
+// Optimization-metrics snapshot for the admin dashboard, derived from D1 (no Analytics Engine
+// dependency). Coverage, data-quality, score health, contribution funnel, scan outcomes.
+export async function getAdminMetrics(env: Env): Promise<AdminMetrics> {
+  const [byVertical, byVerification, foodByBand, cosmeticByBand, contributionsByStatus, scansByResult] = await Promise.all([
+    groupCount(env, "SELECT vertical AS k, COUNT(*) AS c FROM products GROUP BY vertical"),
+    groupCount(env, "SELECT verification_status AS k, COUNT(*) AS c FROM products GROUP BY verification_status"),
+    groupCount(env, "SELECT grade_band AS k, COUNT(*) AS c FROM scores WHERE grade_band IS NOT NULL GROUP BY grade_band"),
+    groupCount(env, "SELECT grade_band AS k, COUNT(*) AS c FROM cosmetic_scores GROUP BY grade_band"),
+    groupCount(env, "SELECT status AS k, COUNT(*) AS c FROM contributions GROUP BY status"),
+    groupCount(env, "SELECT result_status AS k, COUNT(*) AS c FROM scan_history GROUP BY result_status")
+  ]);
+
+  const total = Object.values(byVertical).reduce((sum, count) => sum + count, 0);
+  return {
+    products: { total, byVertical, byVerification },
+    scores: { foodByBand, cosmeticByBand },
+    contributions: { byStatus: contributionsByStatus },
+    scans: { byResult: scansByResult }
+  };
+}
+
+export interface EvidenceCardRow {
+  id: string;
+  ingredientName: string;
+  domain: string;
+  concernLevel: string;
+  evidenceTier: string;
+  evidenceStatus: string;
+  reasonCode: string | null;
+  magnitudeBand: string;
+  contested: boolean;
+  reviewStatus: string;
+  needsHumanVerification: boolean;
+  createdAt: string;
+}
+
+interface RawEvidenceRow {
+  id: string;
+  canonical_name: string;
+  domain: string;
+  concern_level: string;
+  evidence_tier: string;
+  evidence_status: string;
+  reason_code: string | null;
+  magnitude_band: string;
+  contested: number;
+  review_status: string;
+  needs_human_verification: number;
+  created_at: string;
+}
+
+// Admin review surface for ATLAS Evidence Cards (the audit half of autonomous-ATLAS-with-audit).
+export async function listEvidenceCards(
+  env: Env,
+  filter: { reviewStatus?: string; domain?: string; limit?: number } = {}
+): Promise<EvidenceCardRow[]> {
+  const limit = Math.min(Math.max(filter.limit ?? 50, 1), 200);
+  const reviewStatus = filter.reviewStatus ?? null;
+  const domain = filter.domain ?? null;
+  const rows = await env.DB.prepare(`
+    SELECT ie.id, ik.canonical_name, ie.domain, ie.concern_level, ie.evidence_tier, ie.evidence_status,
+           ie.reason_code, ie.magnitude_band, ie.contested, ie.review_status, ie.needs_human_verification,
+           ie.created_at
+    FROM ingredient_evidence ie
+    JOIN ingredient_knowledge ik ON ik.id = ie.ingredient_id
+    WHERE (? IS NULL OR ie.review_status = ?)
+      AND (? IS NULL OR ie.domain = ?)
+    ORDER BY ie.created_at DESC
+    LIMIT ${limit}
+  `).bind(reviewStatus, reviewStatus, domain, domain).all<RawEvidenceRow>();
+
+  return rows.results.map((row) => ({
+    id: row.id,
+    ingredientName: row.canonical_name,
+    domain: row.domain,
+    concernLevel: row.concern_level,
+    evidenceTier: row.evidence_tier,
+    evidenceStatus: row.evidence_status,
+    reasonCode: row.reason_code,
+    magnitudeBand: row.magnitude_band,
+    contested: row.contested === 1,
+    reviewStatus: row.review_status,
+    needsHumanVerification: row.needs_human_verification === 1,
+    createdAt: row.created_at
+  }));
+}
+
+async function groupCount(env: Env, sql: string): Promise<Record<string, number>> {
+  try {
+    const rows = await env.DB.prepare(sql).all<{ k: string | null; c: number }>();
+    const out: Record<string, number> = {};
+    for (const row of rows.results) {
+      out[row.k ?? "unknown"] = Number(row.c) || 0;
+    }
+    return out;
+  } catch (error) {
+    // Don't fail the whole metrics snapshot on one bad query, but make the failure visible rather
+    // than reporting a silent zero that looks like genuinely empty data.
+    console.error(JSON.stringify({
+      level: "error",
+      event: "admin_metrics_group_count_failed",
+      message: error instanceof Error ? error.message : "Unknown error"
+    }));
+    return {};
+  }
 }
 
 async function loadProductFromRow(env: Env, row: ProductRow): Promise<FoodProduct> {

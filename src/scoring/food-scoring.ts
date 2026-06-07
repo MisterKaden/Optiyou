@@ -1,26 +1,40 @@
 import type {
   FoodProduct,
+  GradeBand,
   IngredientFlag,
   PersonalizationProfile,
   ProcessingLevel,
   ReasonCode,
+  SafetyLevel,
   ScoreResult
 } from "../platform/types.ts";
 
 export const FOOD_METHODOLOGY_VERSION = "food-us-ca-v1" as const;
 
+// When a declared allergen (or hard dietary restriction) conflicts, OptiFit is capped here
+// regardless of universal quality — a great cereal is still "avoid" if it contains your allergen.
+const ALLERGEN_FIT_CAP = 12;
+
 export function scoreFoodProduct(product: FoodProduct, profile: PersonalizationProfile): ScoreResult {
   const reasonCodes = new Set<ReasonCode>();
+  const personalizationReasonCodes = new Set<ReasonCode>();
   const nutritionScore = scoreNutrition(product, reasonCodes);
   const ingredientScore = scoreIngredients(product, reasonCodes);
   const processingScore = scoreProcessing(product.processingLevel, reasonCodes);
   const confidenceScore = clampScore(Math.round(product.dataQuality.confidence * 100));
   const optiScore = scoreGeneralProductQuality(product, reasonCodes);
-  const optiFit = clampScore(optiScore + personalizationAdjustment(product, profile, reasonCodes));
+
+  const { adjustment, safetyLevel } = personalizationAdjustment(product, profile, personalizationReasonCodes);
+  let optiFit = clampScore(optiScore + adjustment);
+  if (safetyLevel === "avoid") {
+    optiFit = Math.min(optiFit, ALLERGEN_FIT_CAP);
+  }
 
   return {
     methodologyVersion: FOOD_METHODOLOGY_VERSION,
     aiFinalJudge: false,
+    safetyLevel,
+    gradeBand: gradeBandFor(optiScore),
     scoreComponents: {
       optiScore,
       optiFit,
@@ -29,8 +43,25 @@ export function scoreFoodProduct(product: FoodProduct, profile: PersonalizationP
       processingScore,
       confidenceScore
     },
-    reasonCodes: [...reasonCodes]
+    reasonCodes: [...reasonCodes],
+    personalizationReasonCodes: [...personalizationReasonCodes]
   };
+}
+
+function gradeBandFor(optiScore: number): GradeBand {
+  if (optiScore >= 75) {
+    return "good";
+  }
+  if (optiScore >= 50) {
+    return "mixed";
+  }
+  return "poor";
+}
+
+const SAFETY_RANK: Record<SafetyLevel, number> = { ok: 0, caution: 1, avoid: 2 };
+
+function escalate(current: SafetyLevel, next: SafetyLevel): SafetyLevel {
+  return SAFETY_RANK[next] > SAFETY_RANK[current] ? next : current;
 }
 
 function scoreNutrition(product: FoodProduct, reasonCodes: Set<ReasonCode>): number {
@@ -184,8 +215,9 @@ function personalizationAdjustment(
   product: FoodProduct,
   profile: PersonalizationProfile,
   reasonCodes: Set<ReasonCode>
-): number {
+): { adjustment: number; safetyLevel: SafetyLevel } {
   let adjustment = 0;
+  let safetyLevel: SafetyLevel = "ok";
   const preferences = new Set(profile.preferences);
   const flags = allIngredientFlags(product);
 
@@ -223,20 +255,25 @@ function personalizationAdjustment(
     reasonCodes.add("PREF_PRESERVATIVE_CONFLICT");
   }
 
+  // Dietary restrictions are a stronger-than-preference signal: "caution", not a hard "avoid".
   if (preferences.has("dairy_free") && (product.allergens.includes("dairy") || flags.has("contains_dairy"))) {
     adjustment -= 55;
     reasonCodes.add("PREF_DAIRY_FREE_CONFLICT");
+    safetyLevel = escalate(safetyLevel, "caution");
   }
 
-  if (preferences.has("gluten_free") && (product.allergens.includes("gluten") || flags.has("contains_gluten"))) {
+  if (preferences.has("gluten_free") && (product.allergens.includes("wheat") || flags.has("contains_gluten"))) {
     adjustment -= 55;
     reasonCodes.add("PREF_GLUTEN_FREE_CONFLICT");
+    safetyLevel = escalate(safetyLevel, "caution");
   }
 
+  // A declared allergen is a hard safety signal: "avoid", which caps OptiFit upstream.
   for (const allergen of profile.allergens) {
     if (product.allergens.includes(allergen)) {
       adjustment -= 60;
       reasonCodes.add("PREF_ALLERGEN_CONFLICT");
+      safetyLevel = escalate(safetyLevel, "avoid");
     }
   }
 
@@ -244,10 +281,11 @@ function personalizationAdjustment(
     const avoidedLower = avoided.toLowerCase();
     if (product.ingredients.some((ingredient) => ingredient.name.toLowerCase().includes(avoidedLower))) {
       adjustment -= 30;
+      reasonCodes.add("PREF_AVOIDED_INGREDIENT");
     }
   }
 
-  return adjustment;
+  return { adjustment, safetyLevel };
 }
 
 function allIngredientFlags(product: FoodProduct): Set<IngredientFlag> {
