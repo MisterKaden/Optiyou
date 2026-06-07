@@ -105,6 +105,7 @@
     "AUTH_APPLE_NONCE_TTL_SECONDS": "600",
     "UPLOAD_TOKEN_TTL_SECONDS": "900",
     "METHODOLOGY_VERSION": "food-us-ca-v1",
+    "ADMIN_EMAILS": "kaden@winten.ai",
     "AI_GATEWAY_BASE_URL": "https://gateway.ai.cloudflare.com/v1"
   }
 }
