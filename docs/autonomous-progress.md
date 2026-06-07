@@ -1,0 +1,44 @@
+# Autonomous build session — progress & handoff
+
+Branch: **`mvp-autonomous-build`** · Mode: local + commit only (no remote migrations, no deploys).
+All work verified: **typecheck clean, 67/67 tests pass**, migrations apply against SQLite.
+
+## What shipped (commits oldest → newest)
+
+1. **Scoring hardening** — `safetyLevel`/`gradeBand`, `observedAt` vs `sourcePublishedAt` split,
+   `wheat ≠ gluten`, split universal/personalization reason codes, allergen hard-cap, golden fixtures.
+2. **Phase 2 — admin role + visibility gate** — `isAdmin` via `ADMIN_USER_IDS`/`ADMIN_EMAILS`;
+   `requireAdminAccess` (legacy token fallback); `src/platform/visibility.ts` (user-visible = verified
+   OR unverified & confidence ≥ 0.7); scan returns `pending_verification` + contribution for hidden
+   products; lists filtered; only visible cards cached.
+3. **Phase 3a — cosmetic scoring** (`cosmetic-us-ca-v1`) — `src/cosmetics/` multi-axis, dose/use-aware,
+   evidence-graded; banned = the only hard cap; fragrance/contested inform via advisories.
+4. **Phase 3b — cosmetics data layer** — migration 0005 (`vertical`, `cosmetic_scores`); Open Beauty
+   Facts normalizer (ODbL → `primary_source='off'`); `scripts/import-open-beauty.ts`.
+5. **Phase 5 groundwork — metrics** — `getAdminMetrics()` + `GET /v1/admin/metrics` (D1-derived).
+6. **Phase 3 — cosmetic product-card** + visibility gate generalized to both verticals.
+7. **Phase 4 foundation — Ingredient Intelligence graph** — migration 0006 (`evidence_sources`,
+   `ingredient_knowledge`, `ingredient_evidence`); `src/evidence/` Evidence Card types + guardrails
+   (no-fabricated-citations, contested rules, weak-evidence→advisory) + `applyEvidence` read-path.
+
+## Morning checklist (the bits I intentionally did NOT do)
+
+1. **Review the branch** `mvp-autonomous-build` and merge to `main` if it looks good.
+2. **Apply migrations to remote D1** (I only applied 0004 earlier; 0005 + 0006 are pending):
+   `for m in 0004 0005 0006; do npx wrangler d1 migrations apply optiyou-core --remote; done`
+   (or just run the migrations-apply once — it applies all unapplied).
+3. **Grant yourself admin**: set `ADMIN_USER_IDS` (your `apple:...` id) or `ADMIN_EMAILS` as a prod
+   var/secret. Until then, no one has the admin role (legacy `ADMIN_API_TOKEN` still works).
+
+## Still TODO (needs attended work / live runtime — not safe unattended)
+
+- **Route the scan/lookup API to the cosmetic scorer.** Cosmetics are imported + scoreable + have a
+  card builder, but `handleScan`/`findProductByGtin` are still food-only. Wiring the dual-vertical
+  scan path needs real-D1 integration tests the current fake-D1 harness can't provide.
+- **Live ATLAS** (populate `ingredient_evidence` from primary literature) — needs Workers AI; the
+  deterministic foundation + read-path it writes to are done.
+- **Wire the graph into scoring** (apply `applyEvidence` directives over the v0 keyword seeds) — a
+  design choice (override vs stack; avoid double-counting) best made attended.
+- **Phase 6 photo pipeline** (BiRefNet → R2) — needs Workers AI / R2 runtime.
+- **Phase 7 premium/offline**, **Analytics Engine binding** (left out of `wrangler.jsonc` so deploys
+  don't fail if the feature isn't enabled), **cosmetic CosIng/regulatory enrichment**.
