@@ -205,13 +205,13 @@ verifying" + contribute) · full audit log.
 - **Image trademark/trade-dress** posture = nominative fair use; legit sources only; IP counsel before launch.
 
 ## 12. Build sequence to MVP
-- **Phase 1 — Food data foundation + score** ✅ *(slice 1 done: importer, scoring, provenance, R2)*
-- **Phase 2 — Admin visibility gate + admin role** (unblocks showing imported data safely) ← **next**
-- **Phase 3 — Cosmetics vertical** (`vertical` schema, Open Beauty Facts + CosIng + regulatory ingestion, `cosmetic-us-ca-v1`)
-- **Phase 4 — Ingredient Intelligence graph + ATLAS** (both domains, autonomous + audited)
-- **Phase 5 — OptiFit personalization + optimization metrics dashboard** (both verticals)
-- **Phase 6 — Photo pipeline** (BiRefNet → R2, both verticals)
-- **Phase 7 — Premium (offline mode) + polish** → **MVP launch candidate**
+- **Phase 1 — Food data foundation + score** ✅ *(USDA importer, scoring, provenance, R2)*
+- **Phase 2 — Admin visibility gate + admin role** ✅ *(role on Apple Sign-In; confidence gate; pending_verification flow)*
+- **Phase 3 — Cosmetics vertical** ✅ *(`cosmetic-us-ca-v1` multi-axis scorer; `vertical` schema; Open Beauty Facts ingestion). Still TODO: route the scan/lookup API to the cosmetic scorer + cosmetic visibility; CosIng/regulatory enrichment.*
+- **Phase 4 — Ingredient Intelligence graph + ATLAS** ⏳ *(needs Workers AI — graph schema + Evidence Card model are buildable now; live ATLAS runs attended)*
+- **Phase 5 — OptiFit personalization + optimization metrics dashboard** 🟡 *(food + cosmetic OptiFit done; admin `/v1/admin/metrics` snapshot done; dashboard UI + Analytics Engine binding pending)*
+- **Phase 6 — Photo pipeline** ⏳ *(BiRefNet → R2, both verticals; R2 bucket ready)*
+- **Phase 7 — Premium (offline mode) + polish** ⏳ → **MVP launch candidate**
 
 ## 13. Decisions (resolved 2026-06-06)
 1. **Optimization layer** = OptiFit personalization (diet + skin) **+** product/operational KPIs. ✅ Confirmed (§1/§7 stand).
