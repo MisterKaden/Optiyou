@@ -22,6 +22,7 @@ export type BrandConfirmation = "none" | "claimed" | "confirmed" | "disputed";
 export interface DataQuality {
   source: ProductDataSource;
   observedAt: string;
+  sourcePublishedAt?: string;
   confidence: number;
   verificationStatus: VerificationStatus;
   lastSeenAt: string;
@@ -55,7 +56,7 @@ export interface Ingredient {
 
 export type Allergen =
   | "dairy"
-  | "gluten"
+  | "wheat"
   | "peanut"
   | "tree_nut"
   | "soy"
@@ -123,7 +124,13 @@ export type ReasonCode =
   | "PREF_PRESERVATIVE_CONFLICT"
   | "PREF_ALLERGEN_CONFLICT"
   | "PREF_DAIRY_FREE_CONFLICT"
-  | "PREF_GLUTEN_FREE_CONFLICT";
+  | "PREF_GLUTEN_FREE_CONFLICT"
+  | "PREF_AVOIDED_INGREDIENT";
+
+// OptiScore band for at-a-glance UX. SafetyLevel is a hard signal independent of the score:
+// "avoid" caps OptiFit (e.g. declared allergen conflict) regardless of universal quality.
+export type SafetyLevel = "ok" | "caution" | "avoid";
+export type GradeBand = "poor" | "mixed" | "good";
 
 export interface ScoreComponents {
   optiScore: number;
@@ -137,8 +144,12 @@ export interface ScoreComponents {
 export interface ScoreResult {
   methodologyVersion: "food-us-ca-v1";
   aiFinalJudge: false;
+  // safetyLevel/gradeBand are derived signals; OptiScore is universal, OptiFit is profile-specific.
+  safetyLevel: SafetyLevel;
+  gradeBand: GradeBand;
   scoreComponents: ScoreComponents;
   reasonCodes: ReasonCode[];
+  personalizationReasonCodes: ReasonCode[];
 }
 
 export interface ExplanationClaimMap {

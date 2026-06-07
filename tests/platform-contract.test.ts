@@ -96,8 +96,12 @@ test("food scoring is deterministic and separates OptiScore from profile-specifi
   assert.equal(result.scoreComponents.processingScore, 45);
   assert.equal(result.scoreComponents.confidenceScore, 82);
   assert.ok(result.reasonCodes.includes("NUTRI_ADDED_SUGAR_HIGH"));
-  assert.ok(result.reasonCodes.includes("PREF_LOW_SUGAR_CONFLICT"));
-  assert.ok(result.reasonCodes.includes("PREF_SYNTHETIC_DYE_CONFLICT"));
+  // Personalization reasons now live in their own array, separate from universal reasons.
+  assert.ok(result.personalizationReasonCodes.includes("PREF_LOW_SUGAR_CONFLICT"));
+  assert.ok(result.personalizationReasonCodes.includes("PREF_SYNTHETIC_DYE_CONFLICT"));
+  assert.ok(!result.reasonCodes.includes("PREF_LOW_SUGAR_CONFLICT"));
+  assert.equal(result.safetyLevel, "ok");
+  assert.equal(result.gradeBand, "poor");
 });
 
 test("known product card maps AI copy to deterministic reason codes and alternatives", () => {
