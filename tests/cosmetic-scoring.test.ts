@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { scoreCosmeticProduct } from "../src/cosmetics/scoring.ts";
+import { buildCosmeticCard } from "../src/cosmetics/product-card.ts";
 import { parseInciList } from "../src/cosmetics/ingredient-concerns.ts";
 import type { CosmeticCategory, CosmeticProduct, CosmeticProfile, CosmeticUse } from "../src/cosmetics/types.ts";
 
@@ -83,6 +84,19 @@ test("restricted actives advise pregnancy caution; pregnancy_safe profile confli
   assert.ok(personal.personalizationReasonCodes.includes("PERS_PREGNANCY_CONFLICT"));
   assert.equal(personal.safetyLevel, "caution");
   assert.ok(personal.scoreComponents.optiFit < personal.scoreComponents.optiScore);
+});
+
+test("buildCosmeticCard assembles a consumer card with advisories and alternatives", () => {
+  const fragranced = cosmetic({ inci: "Water, Glycerin, Parfum, Limonene", name: "Scented Cream" });
+  const clean = cosmetic({ inci: "Water, Glycerin, Squalane", name: "Unscented Cream" });
+  const card = buildCosmeticCard({ product: fragranced, profile: EMPTY_PROFILE, alternatives: [clean] });
+
+  assert.equal(card.vertical, "cosmetic");
+  assert.equal(card.methodology.version, "cosmetic-us-ca-v1");
+  assert.ok(card.advisories.length > 0, "fragranced product surfaces advisories");
+  assert.equal(card.alternatives.length, 1);
+  assert.ok(card.alternatives[0].whyBetter.length > 0);
+  assert.equal(typeof card.scores.optiScore, "number");
 });
 
 test("fragrance-free profile conflicts with a fragranced product", () => {

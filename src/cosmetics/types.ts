@@ -103,3 +103,35 @@ export interface CosmeticScoreResult {
   // Inform-don't-punish notes (e.g. "contains fragrance allergens — patch-test if sensitive").
   advisories: string[];
 }
+
+export interface CosmeticAlternative {
+  gtin: string;
+  name: string;
+  brand: string;
+  optiFit: number;
+  whyBetter: string[];
+  paidPlacement: false;
+}
+
+export interface CosmeticProductCard {
+  status: "known" | "estimated";
+  vertical: "cosmetic";
+  product: CosmeticProduct;
+  scores: CosmeticScoreComponents;
+  safetyLevel: SafetyLevel;
+  gradeBand: GradeBand;
+  confidence: {
+    value: number;
+    label: "High confidence" | "Good confidence" | "Low confidence";
+    verificationStatus: CosmeticProduct["dataQuality"]["verificationStatus"];
+    source: CosmeticProduct["dataQuality"]["source"];
+  };
+  reasonCodes: CosmeticReasonCode[];
+  advisories: string[];
+  alternatives: CosmeticAlternative[];
+  methodology: {
+    version: "cosmetic-us-ca-v1";
+    scope: "U.S./Canada cosmetics & personal care";
+    disclaimer: string;
+  };
+}

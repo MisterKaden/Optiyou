@@ -1,11 +1,12 @@
-import type { FoodProduct } from "./types.ts";
+import type { DataQuality } from "./types.ts";
 
 // Regular users only ever see verified or sufficiently-confident products. Everything else stays
 // admin-only until verified, so unverified / low-confidence data never reaches end users. USDA bulk
 // imports land at ~0.8 confidence (visible); records with incomplete nutrition drop below the bar.
+// Works for both verticals — food and cosmetic products both carry `dataQuality`.
 export const USER_VISIBILITY_MIN_CONFIDENCE = 0.7;
 
-export function isUserVisible(product: FoodProduct): boolean {
+export function isUserVisible(product: { dataQuality: DataQuality }): boolean {
   const { verificationStatus, confidence } = product.dataQuality;
   if (verificationStatus === "verified") {
     return true;
@@ -26,6 +27,6 @@ export function includeUnverified(isAdmin: boolean, url: URL): boolean {
   return url.searchParams.get("includeUnverified") !== "false";
 }
 
-export function visibilityLabel(product: FoodProduct): "public" | "admin_only" {
+export function visibilityLabel(product: { dataQuality: DataQuality }): "public" | "admin_only" {
   return isUserVisible(product) ? "public" : "admin_only";
 }
