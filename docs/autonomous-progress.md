@@ -30,7 +30,18 @@ All work verified: **typecheck clean, 67/67 tests pass**, migrations apply again
 3. **Grant yourself admin**: set `ADMIN_USER_IDS` (your `apple:...` id) or `ADMIN_EMAILS` as a prod
    var/secret. Until then, no one has the admin role (legacy `ADMIN_API_TOKEN` still works).
 
+## Code review (high-effort, recall-biased) — done, 6 of 7 fixed
+
+Ran a multi-angle review of the branch. Fixed: cosmetic rows crashing food queries (added
+`vertical='food'` filter to `findProductByGtin`/`searchProducts`/`listAlternatives` — **the critical
+one**); D1 placeholder safety in `listEvidenceCards`; an unmatchable comma keyword; oxybenzone
+endocrine+contested double-penalty; silent metrics-query failures; mislabeled `pending_verification`
+analytics. **Open:** repeat scans of an unverified product create duplicate contributions (TODO in
+`api.ts` — needs the contribution/upload-token flow restructured with integration tests).
+
 ## Still TODO (needs attended work / live runtime — not safe unattended)
+- **Contribution dedup** (`TODO(contrib-dedup)` in `src/http/api.ts`): reuse an open contribution for
+  (user, product) instead of inserting a fresh one on every scan; preserve signed upload tokens.
 
 - **Route the scan/lookup API to the cosmetic scorer.** Cosmetics are imported + scoreable + have a
   card builder, but `handleScan`/`findProductByGtin` are still food-only. Wiring the dual-vertical
