@@ -82,6 +82,19 @@ jobs:
 
       - name: Apply DNS and zone baseline
         if: env.HAS_CLOUDFLAREOPTI_API_TOKEN == 'true' && env.HAS_CLOUDFLARE_ACCOUNT_ID == 'true'
-        run: npm run cloudflare:bootstrap
+        run: |
+          # One-time zone baseline (DNS records + SSL/HTTPS zone settings). Non-blocking: the Worker
+          # deploy above is the gate. If the token lacks Zone Settings / SSL and Certificates edit,
+          # warn instead of failing the whole deploy — these settings are already applied to the
+          # live zone and rarely change. Mirrors the D1-migrations step's graceful handling.
+          set +e
+          npm run cloudflare:bootstrap 2>&1 | tee /tmp/cf-bootstrap.log
+          status="${PIPESTATUS[0]}"
+          set -e
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          echo "::warning title=Zone baseline skipped::Cloudflare rejected a DNS/zone-settings change (the Worker deploy itself succeeded). To let it apply, give CLOUDFLAREOPTI_API_TOKEN these zone permissions on optiyou.co: DNS:Edit, Zone Settings:Edit, SSL and Certificates:Edit."
+          exit 0
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLAREOPTI_API_TOKEN }}
