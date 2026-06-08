@@ -45,6 +45,27 @@ optional + snake_case, so new fields were silently dropped). Synced the high-val
 - Note: `visibility` filtering is enforced server-side (lists only return user-visible products to
   non-admins), so the client needs no extra filter. `isAdmin` is modeled but no in-app admin UI yet.
 
+## North-star push — Frontier #2 (cosmetics end-to-end) + #7 (marketing)
+
+- **#2 cosmetic scan-routing (backend):** `findCosmeticByGtin` + the scan handler routes
+  food → cosmetic → missing; cosmetic cards built/visibility-gated/cached like food; response tagged
+  `vertical:"cosmetic"`. Food path untouched (queries filter `vertical='food'`). sqlite e2e verified.
+- **#2 cosmetic rendering (iOS):** `Product.vertical` + `advisories`; the result screen hides
+  food-only sections for cosmetics and shows a "Good to know" advisories card. iOS BUILD + 8/8 tests.
+- **#2 skin-goal personalization (backend):** `ScanRequestBody.skinPreferences` → `CosmeticProfile`,
+  so skin goals change cosmetic OptiFit; cache key includes them. **Paired follow-up: iOS skin-goals UI.**
+- **#7 marketing site:** repositioned to food **&** skincare, sells the app (waitlist + "Launching
+  first on iPhone"), differentiator copy (personalized fit, evidence-not-fear). Verified via preview.
+
+### Honest state of the frontier (what needs Kaden vs. autonomous)
+- ✅ #1 done · ✅ #2 backend+rendering done (iOS skin-goals UI left) · ✅ #7 done
+- ⏳ #3 real catalog: I can fetch a real API sample + generate SQL locally, but **applying to prod D1
+  + deploy needs sign-off**; bulk ingest needs the large dataset.
+- ⏳ #4 ATLAS live: can write the Workers-AI extraction code, **can't run/deploy it unattended**.
+- ⏳ #5 always-on pipeline: can write Cron+Workflow code; **deploy needs sign-off**.
+- ⏳ #6 admin dashboard: buildable autonomously; **photo pipeline needs Workers AI/R2 runtime**.
+- ⏳ #8 premium/offline + **App Store submission = Kaden-only**.
+
 ## Code review (high-effort, recall-biased) — done, 6 of 7 fixed
 
 Ran a multi-angle review of the branch. Fixed: cosmetic rows crashing food queries (added
