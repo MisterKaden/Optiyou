@@ -19,13 +19,18 @@ struct ProductResultView: View {
             VStack(alignment: .leading, spacing: 14) {
                 safetyBanner
                 heroCard
+                advisoriesCard
                 warningsCard
                 driverSummaryCard
-                nutritionCard
+                if isCosmetic == false {
+                    nutritionCard
+                }
                 ingredientsCard
-                additivesCard
-                processingCard
-                allergensCard
+                if isCosmetic == false {
+                    additivesCard
+                    processingCard
+                    allergensCard
+                }
                 preferencesCard
                 swapsCard
                 optionsCard
@@ -44,6 +49,31 @@ struct ProductResultView: View {
         .sheet(isPresented: $showsIssueReport) {
             NavigationStack {
                 IssueReportView(product: product)
+            }
+        }
+    }
+
+    private var isCosmetic: Bool { product.vertical == .cosmetic }
+
+    // Inform-don't-punish notes (e.g. "patch-test if sensitive", "wash well"). These never move the
+    // score; they're shown as neutral "good to know" info.
+    @ViewBuilder
+    private var advisoriesCard: some View {
+        if product.advisories.isEmpty == false {
+            SectionCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Good to know")
+                        .font(.headline)
+                    ForEach(product.advisories, id: \.self) { note in
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "info.circle")
+                                .foregroundStyle(Color.optiBlue)
+                            Text(note)
+                                .font(.footnote)
+                                .foregroundStyle(Color.optiInk)
+                        }
+                    }
+                }
             }
         }
     }

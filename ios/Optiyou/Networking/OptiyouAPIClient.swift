@@ -287,6 +287,7 @@ private struct ScanResponse: Decodable {
     var safetyLevel: String?
     var visibility: String?
     var message: String?
+    var advisories: [String]?
 
     func lookupOutcome(profile: UserNutritionProfile) throws -> ScanLookupOutcome {
         // "pending_verification" (product exists but isn't verified for users yet) is returned with
@@ -300,6 +301,7 @@ private struct ScanResponse: Decodable {
         }
 
         var product = try productDTO.product()
+        product.advisories = advisories ?? []
         let fallback = product.score(profile: profile)
         let serverResult = scoreResult(product: product, profile: profile, fallback: fallback)
         let serverExplanation = AIExplanation(
@@ -397,6 +399,7 @@ private struct ProductDTO: Decodable {
     var allergens: [String]?
     var processingLevel: String?
     var dataQuality: DataQualityDTO?
+    var vertical: String?
 
     func product() throws -> Product {
         guard let id,
@@ -421,7 +424,8 @@ private struct ProductDTO: Decodable {
             processingLevel: ProcessingLevel(apiValue: processingLevel),
             dataQuality: DataQuality(apiValue: dataQuality?.source),
             packageClaims: [],
-            priceTier: .standard
+            priceTier: .standard,
+            vertical: ProductVertical(apiValue: vertical)
         )
     }
 }
@@ -446,11 +450,12 @@ private struct NutritionDTO: Decodable {
 
 private struct IngredientDTO: Decodable {
     var name: String?
+    var inci: String?
     var flags: [String]?
 
     var ingredient: Ingredient {
         Ingredient(
-            name: name ?? "Unknown ingredient",
+            name: name ?? inci ?? "Unknown ingredient",
             flags: Set((flags ?? []).compactMap(IngredientFlag.init(apiValue:)))
         )
     }

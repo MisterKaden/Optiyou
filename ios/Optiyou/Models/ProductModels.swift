@@ -1,5 +1,14 @@
 import Foundation
 
+enum ProductVertical: String, Hashable {
+    case food
+    case cosmetic
+
+    init(apiValue: String?) {
+        self = apiValue == "cosmetic" ? .cosmetic : .food
+    }
+}
+
 enum ProductCategory: String, CaseIterable, Hashable, Identifiable {
     case unknown
     case cereal
@@ -213,6 +222,9 @@ struct Product: Identifiable, Hashable {
     var dataQuality: DataQuality
     var packageClaims: [String]
     var priceTier: PriceTier
+    var vertical: ProductVertical = .food
+    // Inform-don't-punish notes from the backend (e.g. "patch-test if sensitive"). Cosmetics-heavy.
+    var advisories: [String] = []
     var serverResult: ScoreResult? = nil
     var serverExplanation: AIExplanation? = nil
     var serverAlternatives: [ProductAlternativeSuggestion] = []
