@@ -167,6 +167,8 @@ export interface ProductCard {
   status: "known" | "estimated";
   product: FoodProduct;
   scores: ScoreComponents;
+  safetyLevel: SafetyLevel;
+  gradeBand: GradeBand;
   confidence: {
     value: number;
     label: "High confidence" | "Good confidence" | "Low confidence";

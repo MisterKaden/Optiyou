@@ -121,6 +121,8 @@ test("known product card maps AI copy to deterministic reason codes and alternat
   assert.equal(card.product.gtin, "006178200002");
   assert.equal(card.scores.optiScore, 46);
   assert.equal(card.scores.optiFit, 0);
+  assert.equal(card.safetyLevel, "ok");
+  assert.equal(card.gradeBand, "poor");
   assert.equal(card.confidence.label, "Good confidence");
   assert.equal(card.explanation.aiFinalJudge, false);
   assert.equal(card.explanation.claimMap[0].ref, "NUTRI_ADDED_SUGAR_HIGH");

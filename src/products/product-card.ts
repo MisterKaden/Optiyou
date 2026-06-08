@@ -25,6 +25,8 @@ export function buildProductCard(input: BuildProductCardInput): ProductCard {
     status: input.status ?? "known",
     product: input.product,
     scores: score.scoreComponents,
+    safetyLevel: score.safetyLevel,
+    gradeBand: score.gradeBand,
     confidence: {
       value: score.scoreComponents.confidenceScore,
       label: confidenceLabel(score.scoreComponents.confidenceScore),
