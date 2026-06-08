@@ -1,5 +1,8 @@
 import { buildContributionIntent, verifyUploadToken } from "../contributions/contribution-intent.ts";
 import { buildProductCard } from "../products/product-card.ts";
+import { buildCosmeticCard } from "../cosmetics/product-card.ts";
+import { findCosmeticByGtin } from "../cosmetics/repository.ts";
+import type { CosmeticProfile } from "../cosmetics/types.ts";
 import { scoreFoodProduct, FOOD_METHODOLOGY_VERSION } from "../scoring/food-scoring.ts";
 import {
   createAppleSignInNonce,
@@ -158,6 +161,12 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
 
   const product = await findProductByGtin(env, body.gtin);
   if (!product) {
+    // Not a food product — try the cosmetics vertical before treating it as missing.
+    const cosmeticResponse = await tryCosmeticScan(request, env, ctx, user, body, profile, persistedProfileId, cacheKey);
+    if (cosmeticResponse) {
+      return cosmeticResponse;
+    }
+
     const intent = await createMissingProductIntent(request, env, user.id, body.gtin, profile.id);
     await createContributionShell(env, intent, user.id);
     ctx.waitUntil(recordScan(env, {
@@ -230,6 +239,76 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
   }));
 
   return jsonResponse({ ...card, cache: "miss-filled", visibility: visibilityLabel(product) });
+}
+
+// Routes a scan to the cosmetics vertical. Returns a Response if the GTIN is a known cosmetic
+// (card or pending_verification), or null if it isn't a cosmetic (so the caller treats it as missing).
+async function tryCosmeticScan(
+  request: Request,
+  env: Env,
+  ctx: RuntimeContext,
+  user: { id: string; isAdmin: boolean },
+  body: ScanRequestBody,
+  profile: PersonalizationProfile,
+  persistedProfileId: string | undefined,
+  cacheKey: string
+): Promise<Response | null> {
+  const cosmetic = await findCosmeticByGtin(env, body.gtin);
+  if (!cosmetic) {
+    return null;
+  }
+
+  const visible = isUserVisible(cosmetic);
+  if (!visible && !user.isAdmin) {
+    const intent = await createMissingProductIntent(request, env, user.id, body.gtin, profile.id);
+    await createContributionShell(env, intent, user.id);
+    ctx.waitUntil(recordScan(env, {
+      userId: user.id,
+      profileId: persistedProfileId,
+      productId: cosmetic.id,
+      gtin: body.gtin,
+      scanSource: body.source ?? "barcode",
+      resultStatus: "pending_verification"
+    }));
+    ctx.waitUntil(writeScanAnalytics(env, { outcome: "estimated", gtin: body.gtin, userId: user.id }));
+    return jsonResponse({
+      ...intent,
+      status: "pending_verification",
+      message: "We're still verifying this product. Add a photo of the label to help us confirm it."
+    }, { status: 202 });
+  }
+
+  // Skin-goal personalization arrives once the app sends a cosmetic profile; for now OptiFit uses the
+  // shared avoided-ingredients list and no skin preferences (so OptiFit ≈ OptiScore).
+  const cosmeticProfile: CosmeticProfile = {
+    id: profile.id,
+    preferences: [],
+    avoidedIngredients: profile.avoidedIngredients
+  };
+  const card = buildCosmeticCard({ product: cosmetic, profile: cosmeticProfile });
+
+  if (visible) {
+    ctx.waitUntil(env.PRODUCT_CACHE.put(cacheKey, JSON.stringify(card), { expirationTtl: 60 * 60 }));
+  }
+  ctx.waitUntil(recordScan(env, {
+    userId: user.id,
+    profileId: persistedProfileId,
+    productId: cosmetic.id,
+    gtin: body.gtin,
+    scanSource: body.source ?? "barcode",
+    resultStatus: "known",
+    optiScore: card.scores.optiScore,
+    optiFit: card.scores.optiFit
+  }));
+  ctx.waitUntil(writeScanAnalytics(env, {
+    outcome: "known",
+    gtin: body.gtin,
+    userId: user.id,
+    optiScore: card.scores.optiScore,
+    optiFit: card.scores.optiFit
+  }));
+
+  return jsonResponse({ ...card, cache: "miss-filled", visibility: visibilityLabel(cosmetic) });
 }
 
 async function recordKnownScan(
