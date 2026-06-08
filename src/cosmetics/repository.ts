@@ -108,6 +108,36 @@ export async function findCosmeticByGtin(env: Env, gtin: string): Promise<Cosmet
   };
 }
 
+// Same-category cosmetics that score higher than the scanned product — the "better alternatives".
+// Computed on the fly (no precomputed alternatives table for cosmetics yet); top 3 by OptiScore.
+export async function listCosmeticAlternatives(
+  env: Env,
+  product: CosmeticProduct,
+  minOptiScore: number
+): Promise<CosmeticProduct[]> {
+  const rows = await env.DB.prepare(`
+    SELECT p.gtin
+    FROM products p
+    JOIN product_versions pv ON pv.id = p.current_version_id
+    JOIN cosmetic_scores cs ON cs.product_version_id = pv.id
+    WHERE p.vertical = 'cosmetic'
+      AND p.category = ?
+      AND p.gtin != ?
+      AND cs.opti_score > ?
+    ORDER BY cs.opti_score DESC
+    LIMIT 3
+  `).bind(product.category, product.gtin, minOptiScore).all<{ gtin: string }>();
+
+  const alternatives: CosmeticProduct[] = [];
+  for (const row of rows.results) {
+    const alternative = await findCosmeticByGtin(env, row.gtin);
+    if (alternative) {
+      alternatives.push(alternative);
+    }
+  }
+  return alternatives;
+}
+
 const CONCERN_TYPES = new Set<CosmeticConcernType>([
   "banned", "restricted_use", "cmr", "formaldehyde_releaser", "endocrine_suspected",
   "fragrance_allergen", "irritant", "environmental", "contested"

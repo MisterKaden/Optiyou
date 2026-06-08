@@ -1,7 +1,8 @@
 import { buildContributionIntent, verifyUploadToken } from "../contributions/contribution-intent.ts";
 import { buildProductCard } from "../products/product-card.ts";
 import { buildCosmeticCard } from "../cosmetics/product-card.ts";
-import { findCosmeticByGtin } from "../cosmetics/repository.ts";
+import { scoreCosmeticProduct } from "../cosmetics/scoring.ts";
+import { findCosmeticByGtin, listCosmeticAlternatives } from "../cosmetics/repository.ts";
 import type { CosmeticPreference, CosmeticProfile } from "../cosmetics/types.ts";
 import { scoreFoodProduct, FOOD_METHODOLOGY_VERSION } from "../scoring/food-scoring.ts";
 import {
@@ -283,7 +284,9 @@ async function tryCosmeticScan(
     preferences: cosmeticPreferencesFrom(body.skinPreferences),
     avoidedIngredients: profile.avoidedIngredients
   };
-  const card = buildCosmeticCard({ product: cosmetic, profile: cosmeticProfile });
+  const currentScore = scoreCosmeticProduct(cosmetic, cosmeticProfile);
+  const alternatives = await listCosmeticAlternatives(env, cosmetic, currentScore.scoreComponents.optiScore);
+  const card = buildCosmeticCard({ product: cosmetic, profile: cosmeticProfile, alternatives });
 
   if (visible) {
     ctx.waitUntil(env.PRODUCT_CACHE.put(cacheKey, JSON.stringify(card), { expirationTtl: 60 * 60 }));
