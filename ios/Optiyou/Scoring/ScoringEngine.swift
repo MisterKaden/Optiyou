@@ -286,6 +286,49 @@ struct ScoreResult: Hashable {
     var verdict: String
     var reasons: [ScoreReason]
     var warnings: [ProductWarning]
+    // Hard safety signal from the backend (allergen conflict -> .avoid, capped OptiFit). Defaults to
+    // .ok so the local fallback engine and tests construct without change.
+    var safetyLevel: SafetyLevel = .ok
+
+    // At-a-glance band. Computed from OptiScore with the same thresholds as the backend
+    // (good >= 75, mixed >= 50, else poor), so it always matches the server's gradeBand.
+    var gradeBand: GradeBand { GradeBand(value: optiScore.value) }
+}
+
+enum SafetyLevel: String, Hashable {
+    case ok
+    case caution
+    case avoid
+
+    init(apiValue: String?) {
+        switch apiValue {
+        case "avoid": self = .avoid
+        case "caution": self = .caution
+        default: self = .ok
+        }
+    }
+}
+
+enum GradeBand: String, Hashable {
+    case poor
+    case mixed
+    case good
+
+    init(value: Int) {
+        switch value {
+        case 75...: self = .good
+        case 50..<75: self = .mixed
+        default: self = .poor
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .poor: "Poor"
+        case .mixed: "Mixed"
+        case .good: "Good"
+        }
+    }
 }
 
 struct Score: Hashable {

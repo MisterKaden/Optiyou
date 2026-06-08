@@ -17,6 +17,7 @@ struct ProductResultView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                safetyBanner
                 heroCard
                 warningsCard
                 driverSummaryCard
@@ -43,6 +44,49 @@ struct ProductResultView: View {
         .sheet(isPresented: $showsIssueReport) {
             NavigationStack {
                 IssueReportView(product: product)
+            }
+        }
+    }
+
+    // Hard safety signal from the backend, shown above everything else. "avoid" = a declared allergen
+    // or hard dietary conflict (OptiFit is capped server-side regardless of how good the product is).
+    @ViewBuilder
+    private var safetyBanner: some View {
+        switch result.safetyLevel {
+        case .avoid:
+            safetyBannerView(
+                title: "Avoid for your profile",
+                detail: "Conflicts with a declared allergen or hard dietary restriction.",
+                systemImage: "xmark.octagon.fill",
+                color: .optiRed
+            )
+        case .caution:
+            safetyBannerView(
+                title: "Use caution",
+                detail: "May not fit one of your dietary preferences.",
+                systemImage: "exclamationmark.triangle.fill",
+                color: .optiAmber
+            )
+        case .ok:
+            EmptyView()
+        }
+    }
+
+    private func safetyBannerView(title: String, detail: String, systemImage: String, color: Color) -> some View {
+        SectionCard {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(color)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(color)
+                    Text(detail)
+                        .font(.footnote)
+                        .foregroundStyle(Color.optiMuted)
+                }
+                Spacer(minLength: 0)
             }
         }
     }

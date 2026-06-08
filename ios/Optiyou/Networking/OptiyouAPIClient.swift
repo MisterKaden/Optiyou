@@ -245,6 +245,7 @@ struct AuthSession: Codable, Hashable {
 struct AuthenticatedAPIUser: Codable, Hashable {
     var id: String
     var email: String?
+    var isAdmin: Bool?
 }
 
 private enum OptiyouAuthSessionStore {
@@ -283,9 +284,14 @@ private struct ScanResponse: Decodable {
     var alternatives: [AlternativeDTO]?
     var contribution: ContributionDTO?
     var uploads: [UploadDTO]?
+    var safetyLevel: String?
+    var visibility: String?
+    var message: String?
 
     func lookupOutcome(profile: UserNutritionProfile) throws -> ScanLookupOutcome {
-        if status == "missing_product" {
+        // "pending_verification" (product exists but isn't verified for users yet) is returned with
+        // the same flattened intent shape as a true missing product, so it routes to the same draft.
+        if status == "missing_product" || status == "pending_verification" {
             return .contribution(contributionDraft)
         }
 
@@ -313,7 +319,7 @@ private struct ScanResponse: Decodable {
         return ContributionDraft(
             id: contribution?.id ?? UUID().uuidString,
             gtin: product?.gtin ?? "",
-            status: contribution?.status ?? "Awaiting label photos",
+            status: message ?? contribution?.status ?? "Awaiting label photos",
             confidenceLabel: "Low confidence until reviewed",
             uploads: uploadTargets.isEmpty ? uploadKinds.map { ContributionUpload(kind: $0) } : uploadTargets
         )
@@ -342,7 +348,8 @@ private struct ScanResponse: Decodable {
             ),
             verdict: explanation?.summary ?? fallback.verdict,
             reasons: mappedReasons.isEmpty ? fallback.reasons : mappedReasons,
-            warnings: mappedWarnings.isEmpty ? fallback.warnings : mappedWarnings
+            warnings: mappedWarnings.isEmpty ? fallback.warnings : mappedWarnings,
+            safetyLevel: SafetyLevel(apiValue: safetyLevel)
         )
     }
 }

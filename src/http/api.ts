@@ -190,11 +190,12 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
       resultStatus: "pending_verification"
     }));
     ctx.waitUntil(writeScanAnalytics(env, { outcome: "pending_verification", gtin: body.gtin, userId: user.id }));
+    // Flatten the intent (same shape as the missing-product response) + override status and add a
+    // message, so clients handle "still verifying" and "missing" with one code path.
     return jsonResponse({
+      ...intent,
       status: "pending_verification",
-      gtin: body.gtin,
-      message: "We're still verifying this product. Add a photo of the label to help us confirm it.",
-      contribution: intent
+      message: "We're still verifying this product. Add a photo of the label to help us confirm it."
     }, { status: 202 });
   }
 
