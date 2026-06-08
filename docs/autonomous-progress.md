@@ -30,6 +30,21 @@ All work verified: **typecheck clean, 67/67 tests pass**, migrations apply again
 3. **Grant yourself admin**: set `ADMIN_USER_IDS` (your `apple:...` id) or `ADMIN_EMAILS` as a prod
    var/secret. Until then, no one has the admin role (legacy `ADMIN_API_TOKEN` still works).
 
+## North-star push — Frontier #1: iOS ↔ backend sync (branch `ios-backend-sync`)
+
+Mapped the SwiftUI app (backend-first scoring with a local fallback; base URL = optiyou.co; all DTOs
+optional + snake_case, so new fields were silently dropped). Synced the high-value shapes:
+- **Backend:** `ProductCard` now exposes `safetyLevel` + `gradeBand` (the scorer computed them but
+  `buildProductCard` dropped them); `pending_verification` scan response flattened (spread the intent)
+  so clients handle it like a missing product.
+- **iOS:** `ScoreResult` gains `safetyLevel` (from API) + computed `gradeBand`; the API client decodes
+  the new fields, handles `pending_verification`, and adds `AuthenticatedAPIUser.isAdmin`;
+  `ProductResultView` shows a prominent **safety banner** (red "Avoid" / amber "Use caution") for
+  allergen/dietary conflicts.
+- **Verified:** backend tsc + 68 tests; iOS `BUILD SUCCEEDED` + 8/8 `OptiyouTests` (Xcode 26.3, sim).
+- Note: `visibility` filtering is enforced server-side (lists only return user-visible products to
+  non-admins), so the client needs no extra filter. `isAdmin` is modeled but no in-app admin UI yet.
+
 ## Code review (high-effort, recall-biased) — done, 6 of 7 fixed
 
 Ran a multi-angle review of the branch. Fixed: cosmetic rows crashing food queries (added
