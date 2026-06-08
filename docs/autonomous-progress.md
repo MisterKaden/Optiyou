@@ -65,8 +65,19 @@ optional + snake_case, so new fields were silently dropped). Synced the high-val
 - **#3 real-catalog staging:** `scripts/fetch-open-beauty-sample.sh` + validated the cosmetic importer
   against REAL Open Beauty Facts data (8 real moisturizers, sane scores, real-INCI handling).
 
-### Honest state of the frontier (what needs Kaden vs. autonomous)
-- ✅ #1 done · ✅ #2 fully end-to-end · ✅ #6 dashboard (photo pipeline pending) · ✅ #7 done · 🟡 #3 staged
+### Even more landed
+- **#2 cosmetic alternatives:** `listCosmeticAlternatives` — cosmetic cards now carry better
+  same-category options (closes the last launch-flow gap vs food). sqlite-verified.
+- **#4 ATLAS extraction core:** `src/evidence/atlas.ts` — prompt + guarded parser (unverifiable→tier C +
+  needs-verification; preclinical ≤C; contested never large). 6 tests. Live wiring = Workers-AI runtime.
+- **#5 always-on pipeline scaffold:** `planRefresh` (tested) + nightly Cron → `scheduled()` →
+  enqueue refresh → consumer marks it. Full re-fetch+re-score = deploy-time.
+
+### Honest state of the frontier (autonomous ceiling reached)
+- ✅ #1 · ✅ #2 (fully end-to-end + alternatives + personalization) · 🟡 #3 staged · ✅ #4 core (live=runtime)
+  · ✅ #5 scaffold (full ingest=deploy) · ✅ #6 dashboard (photo pipeline=runtime) · ✅ #7 · ⏳ #8 premium
+- **Everything remaining is gated on Kaden's sign-off** (deploy / remote migration / apply prod
+  catalog), **Workers AI runtime** (ATLAS-live, photo pipeline), or **Kaden-only** (App Store, premium).
 - ⏳ #3 real catalog: I can fetch a real API sample + generate SQL locally, but **applying to prod D1
   + deploy needs sign-off**; bulk ingest needs the large dataset.
 - ⏳ #4 ATLAS live: can write the Workers-AI extraction code, **can't run/deploy it unattended**.
