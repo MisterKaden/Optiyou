@@ -76,6 +76,9 @@
       }
     ]
   },
+  "triggers": {
+    "crons": ["0 7 * * *"]
+  },
   "ai": {
     "binding": "AI"
   },

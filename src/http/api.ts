@@ -13,6 +13,7 @@ import {
   readSecret
 } from "../platform/auth.ts";
 import { includeUnverified, isUserVisible, visibilityLabel } from "../platform/visibility.ts";
+import { planRefresh } from "../ingestion/refresh.ts";
 import {
   createContributionShell,
   ensureUser,
@@ -118,6 +119,19 @@ export async function handleApiRequest(request: Request, env: Env, ctx: RuntimeC
 export async function handleIngestionQueue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
   for (const message of batch.messages) {
     const body = message.body;
+
+    if (isRefreshMessage(body)) {
+      // Always-on pipeline: mark the product as queued for refresh. Full re-fetch + re-score is the
+      // deploy-time integration (USDA/OBF re-pull through the importers).
+      await env.APP_CONFIG.put(`refresh:${body.gtin}`, JSON.stringify({
+        status: "refresh_planned",
+        productId: body.productId,
+        updatedAt: new Date().toISOString()
+      }));
+      message.ack();
+      continue;
+    }
+
     if (!isIngestionQueueMessage(body)) {
       message.ack();
       continue;
@@ -132,6 +146,32 @@ export async function handleIngestionQueue(batch: MessageBatch<unknown>, env: En
     }));
     message.ack();
   }
+}
+
+// Nightly cron entry point: find stale catalog entries and enqueue them for refresh.
+export async function handleScheduledRefresh(env: Env): Promise<void> {
+  const rows = await env.DB.prepare(`
+    SELECT id AS product_id, gtin, last_seen_at
+    FROM products
+    ORDER BY last_seen_at ASC
+    LIMIT 500
+  `).all<{ product_id: string; gtin: string; last_seen_at: string }>();
+
+  const stale = planRefresh(
+    rows.results.map((row) => ({ productId: row.product_id, gtin: row.gtin, lastSeenAt: row.last_seen_at })),
+    new Date()
+  );
+
+  for (const candidate of stale.slice(0, 100)) {
+    await env.INGESTION_QUEUE.send({ type: "refresh_product", productId: candidate.productId, gtin: candidate.gtin });
+  }
+}
+
+function isRefreshMessage(value: unknown): value is { type: "refresh_product"; productId: string; gtin: string } {
+  return Boolean(value) && typeof value === "object" &&
+    Reflect.get(value as object, "type") === "refresh_product" &&
+    typeof Reflect.get(value as object, "gtin") === "string" &&
+    typeof Reflect.get(value as object, "productId") === "string";
 }
 
 async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Promise<Response> {

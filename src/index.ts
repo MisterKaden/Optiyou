@@ -1,4 +1,4 @@
-import { handleApiRequest, handleIngestionQueue } from "./http/api.ts";
+import { handleApiRequest, handleIngestionQueue, handleScheduledRefresh } from "./http/api.ts";
 import { jsonResponse, withResponseHeaders } from "./http/responses.ts";
 
 export default {
@@ -40,5 +40,9 @@ export default {
 
   async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
     await handleIngestionQueue(batch, env);
+  },
+
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(handleScheduledRefresh(env));
   }
 };
