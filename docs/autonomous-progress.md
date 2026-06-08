@@ -57,8 +57,16 @@ optional + snake_case, so new fields were silently dropped). Synced the high-val
 - **#7 marketing site:** repositioned to food **&** skincare, sells the app (waitlist + "Launching
   first on iPhone"), differentiator copy (personalized fit, evidence-not-fear). Verified via preview.
 
+### More landed since
+- **#2 fully end-to-end:** iOS skin-goals UI (`SkinGoal` + Profile section + `skinPreferences` in the
+  scan request) — set skin goals → cosmetic OptiFit changes. iOS BUILD + 8/8 tests.
+- **#6 admin dashboard:** Metrics + ATLAS Evidence-review panels in `public/admin` consuming
+  `/v1/admin/metrics` + `/v1/admin/evidence`. Structure verified via preview + `node --check`.
+- **#3 real-catalog staging:** `scripts/fetch-open-beauty-sample.sh` + validated the cosmetic importer
+  against REAL Open Beauty Facts data (8 real moisturizers, sane scores, real-INCI handling).
+
 ### Honest state of the frontier (what needs Kaden vs. autonomous)
-- ✅ #1 done · ✅ #2 backend+rendering done (iOS skin-goals UI left) · ✅ #7 done
+- ✅ #1 done · ✅ #2 fully end-to-end · ✅ #6 dashboard (photo pipeline pending) · ✅ #7 done · 🟡 #3 staged
 - ⏳ #3 real catalog: I can fetch a real API sample + generate SQL locally, but **applying to prod D1
   + deploy needs sign-off**; bulk ingest needs the large dataset.
 - ⏳ #4 ATLAS live: can write the Workers-AI extraction code, **can't run/deploy it unattended**.
