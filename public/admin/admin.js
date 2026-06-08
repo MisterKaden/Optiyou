@@ -110,8 +110,93 @@ document.getElementById("search").addEventListener("click", async () => {
   renderProducts(document.getElementById("products"), data.products || [], "No products found.");
 });
 
+function renderMetrics(metrics) {
+  const target = document.getElementById("metrics");
+  target.replaceChildren();
+  if (!metrics) {
+    target.append(text("p", "No metrics available."));
+    return;
+  }
+
+  target.append(text("p", `Total products: ${metrics.products?.total ?? 0}`, "metric-total"));
+
+  const groups = [
+    ["By vertical", metrics.products?.byVertical],
+    ["By verification", metrics.products?.byVerification],
+    ["Food grade bands", metrics.scores?.foodByBand],
+    ["Cosmetic grade bands", metrics.scores?.cosmeticByBand],
+    ["Contributions", metrics.contributions?.byStatus],
+    ["Scan outcomes", metrics.scans?.byResult]
+  ];
+
+  const wrap = document.createElement("div");
+  wrap.className = "metric-grid";
+  for (const [label, obj] of groups) {
+    const block = document.createElement("div");
+    block.className = "metric-group";
+    block.append(text("h3", label));
+    const entries = Object.entries(obj || {});
+    if (!entries.length) {
+      block.append(text("div", "—", "metric-row"));
+    }
+    for (const [key, value] of entries) {
+      block.append(text("div", `${key}: ${value}`, "metric-row"));
+    }
+    wrap.append(block);
+  }
+  target.append(wrap);
+}
+
+async function loadMetrics() {
+  try {
+    const data = await api("/v1/admin/metrics");
+    renderMetrics(data.metrics);
+  } catch {
+    document.getElementById("metrics").replaceChildren(text("p", "Could not load metrics."));
+  }
+}
+
+function renderEvidence(cards) {
+  const target = document.getElementById("evidence");
+  target.replaceChildren();
+  if (!cards.length) {
+    target.append(text("p", "No evidence cards."));
+    return;
+  }
+
+  for (const card of cards) {
+    const item = document.createElement("div");
+    item.className = "item";
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.append(
+      text("span", `${card.domain} · tier ${card.evidenceTier} · ${card.evidenceStatus}`),
+      text("span", `${card.concernLevel}${card.contested ? " · contested" : ""} · ${card.reviewStatus}`)
+    );
+    item.append(text("strong", `${card.ingredientName} (${card.magnitudeBand})`), meta);
+    if (card.needsHumanVerification) {
+      item.append(text("div", "needs human verification", "warn"));
+    }
+    target.append(item);
+  }
+}
+
+async function loadEvidence() {
+  const status = document.getElementById("evidence-status").value;
+  try {
+    const data = await api(`/v1/admin/evidence${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+    renderEvidence(data.cards || []);
+  } catch {
+    document.getElementById("evidence").replaceChildren(text("p", "Could not load evidence cards."));
+  }
+}
+
 document.getElementById("refresh").addEventListener("click", async () => {
   await loadQueue();
 });
+document.getElementById("refresh-metrics").addEventListener("click", loadMetrics);
+document.getElementById("load-evidence").addEventListener("click", loadEvidence);
 
 loadQueue();
+loadMetrics();
+loadEvidence();

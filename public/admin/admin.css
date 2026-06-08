@@ -131,6 +131,42 @@ button.danger {
   font-weight: 800;
 }
 
+.metric-total {
+  font-weight: 800;
+  margin: 6px 0 12px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.metric-group {
+  border: 1px solid var(--line, #d9e2df);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.metric-group h3 {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.metric-row {
+  font-size: 0.9rem;
+  padding: 2px 0;
+}
+
+.warn {
+  color: var(--danger, #c2556a);
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
 @media (max-width: 820px) {
   header,
   .grid {
