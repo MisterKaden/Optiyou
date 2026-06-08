@@ -234,6 +234,9 @@ export interface ScanRequestBody {
   gtin: string;
   profileId?: string;
   profile?: PersonalizationProfile;
+  // Cosmetic skin goals (sensitive_skin, fragrance_free, pregnancy_safe, …). Only used when the
+  // scanned product is a cosmetic; food scoring ignores it.
+  skinPreferences?: string[];
   source?: ScanSource;
 }
 

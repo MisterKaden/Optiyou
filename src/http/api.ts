@@ -2,7 +2,7 @@ import { buildContributionIntent, verifyUploadToken } from "../contributions/con
 import { buildProductCard } from "../products/product-card.ts";
 import { buildCosmeticCard } from "../cosmetics/product-card.ts";
 import { findCosmeticByGtin } from "../cosmetics/repository.ts";
-import type { CosmeticProfile } from "../cosmetics/types.ts";
+import type { CosmeticPreference, CosmeticProfile } from "../cosmetics/types.ts";
 import { scoreFoodProduct, FOOD_METHODOLOGY_VERSION } from "../scoring/food-scoring.ts";
 import {
   createAppleSignInNonce,
@@ -139,7 +139,7 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
   const body = parseScanRequest(await readJsonBody(request));
   const profile = body.profile ?? await loadProfile(env, user.id, body.profileId);
   const persistedProfileId = body.profile ? undefined : body.profileId;
-  const cacheKey = await scanCacheKey(body.gtin, profile);
+  const cacheKey = await scanCacheKey(body.gtin, profile, body.skinPreferences);
   const cached = await env.PRODUCT_CACHE.get(cacheKey);
 
   if (cached) {
@@ -278,11 +278,9 @@ async function tryCosmeticScan(
     }, { status: 202 });
   }
 
-  // Skin-goal personalization arrives once the app sends a cosmetic profile; for now OptiFit uses the
-  // shared avoided-ingredients list and no skin preferences (so OptiFit ≈ OptiScore).
   const cosmeticProfile: CosmeticProfile = {
     id: profile.id,
-    preferences: [],
+    preferences: cosmeticPreferencesFrom(body.skinPreferences),
     avoidedIngredients: profile.avoidedIngredients
   };
   const card = buildCosmeticCard({ product: cosmetic, profile: cosmeticProfile });
@@ -309,6 +307,15 @@ async function tryCosmeticScan(
   }));
 
   return jsonResponse({ ...card, cache: "miss-filled", visibility: visibilityLabel(cosmetic) });
+}
+
+const COSMETIC_PREFERENCES = new Set<CosmeticPreference>([
+  "sensitive_skin", "fragrance_free", "pregnancy_safe", "acne_prone", "vegan", "avoid_endocrine_disruptors"
+]);
+
+function cosmeticPreferencesFrom(values: string[] | undefined): CosmeticPreference[] {
+  return (values ?? []).filter((value): value is CosmeticPreference =>
+    COSMETIC_PREFERENCES.has(value as CosmeticPreference));
 }
 
 async function recordKnownScan(
@@ -553,6 +560,7 @@ function parseScanRequest(value: unknown): ScanRequestBody {
   const profileId = Reflect.get(value, "profileId");
   const profile = Reflect.get(value, "profile");
   const source = Reflect.get(value, "source");
+  const skinPreferences = Reflect.get(value, "skinPreferences");
 
   if (typeof gtin !== "string" || !/^\d{8,14}$/.test(gtin)) {
     throw new HttpError(400, "invalid_gtin", "GTIN must be 8 to 14 digits.");
@@ -562,6 +570,9 @@ function parseScanRequest(value: unknown): ScanRequestBody {
     gtin,
     profileId: typeof profileId === "string" ? profileId : undefined,
     profile: isProfile(profile) ? profile : undefined,
+    skinPreferences: Array.isArray(skinPreferences)
+      ? skinPreferences.filter((entry): entry is string => typeof entry === "string")
+      : undefined,
     source: isScanSource(source) ? source : "barcode"
   };
 }
@@ -639,13 +650,18 @@ async function createMissingProductIntent(
   });
 }
 
-async function scanCacheKey(gtin: string, profile: PersonalizationProfile): Promise<string> {
+async function scanCacheKey(
+  gtin: string,
+  profile: PersonalizationProfile,
+  skinPreferences: string[] | undefined
+): Promise<string> {
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(JSON.stringify({
       preferences: [...profile.preferences].sort(),
       allergens: [...profile.allergens].sort(),
-      avoidedIngredients: [...profile.avoidedIngredients].sort()
+      avoidedIngredients: [...profile.avoidedIngredients].sort(),
+      skinPreferences: [...(skinPreferences ?? [])].sort()
     }))
   );
   return `scan:${gtin}:${base64UrlEncode(digest)}`;
