@@ -136,19 +136,56 @@ enum UserPreference: String, CaseIterable, Hashable, Identifiable {
     }
 }
 
+// Skin goals for cosmetics. apiValue matches the backend CosmeticPreference vocabulary.
+enum SkinGoal: String, CaseIterable, Hashable, Identifiable {
+    case sensitiveSkin
+    case fragranceFree
+    case pregnancySafe
+    case acneProne
+    case vegan
+    case avoidEndocrineDisruptors
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .sensitiveSkin: "Sensitive skin"
+        case .fragranceFree: "Fragrance-free"
+        case .pregnancySafe: "Pregnancy-safe"
+        case .acneProne: "Acne-prone"
+        case .vegan: "Vegan"
+        case .avoidEndocrineDisruptors: "Avoid endocrine disruptors"
+        }
+    }
+
+    var apiValue: String {
+        switch self {
+        case .sensitiveSkin: "sensitive_skin"
+        case .fragranceFree: "fragrance_free"
+        case .pregnancySafe: "pregnancy_safe"
+        case .acneProne: "acne_prone"
+        case .vegan: "vegan"
+        case .avoidEndocrineDisruptors: "avoid_endocrine_disruptors"
+        }
+    }
+}
+
 struct UserNutritionProfile: Hashable {
     var preferences: Set<UserPreference>
     var allergens: Set<Allergen>
     var avoidedIngredients: [String]
+    var skinGoals: Set<SkinGoal>
 
     init(
         preferences: [UserPreference] = [],
         allergens: [Allergen] = [],
-        avoidedIngredients: [String] = []
+        avoidedIngredients: [String] = [],
+        skinGoals: [SkinGoal] = []
     ) {
         self.preferences = Set(preferences)
         self.allergens = Set(allergens)
         self.avoidedIngredients = avoidedIngredients
+        self.skinGoals = Set(skinGoals)
     }
 
     mutating func setPreference(_ preference: UserPreference, enabled: Bool) {
@@ -156,6 +193,14 @@ struct UserNutritionProfile: Hashable {
             preferences.insert(preference)
         } else {
             preferences.remove(preference)
+        }
+    }
+
+    mutating func setSkinGoal(_ goal: SkinGoal, enabled: Bool) {
+        if enabled {
+            skinGoals.insert(goal)
+        } else {
+            skinGoals.remove(goal)
         }
     }
 

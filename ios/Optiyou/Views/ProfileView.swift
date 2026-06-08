@@ -21,6 +21,17 @@ struct ProfileView: View {
 
                 SectionCard {
                     VStack(alignment: .leading, spacing: 14) {
+                        Text("Skin goals")
+                            .font(.headline)
+                        Text("Used when you scan skincare — changes the personalized fit.")
+                            .font(.footnote)
+                            .foregroundStyle(Color.optiMuted)
+                        SkinGoalToggleGrid(profile: $store.profile)
+                    }
+                }
+
+                SectionCard {
+                    VStack(alignment: .leading, spacing: 14) {
                         Text("Allergens")
                             .font(.headline)
                         AllergenToggleGrid(profile: $store.profile)

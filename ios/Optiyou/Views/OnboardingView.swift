@@ -99,6 +99,24 @@ struct AllergenToggleGrid: View {
     }
 }
 
+struct SkinGoalToggleGrid: View {
+    @Binding var profile: UserNutritionProfile
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 142), spacing: 10)], spacing: 10) {
+            ForEach(SkinGoal.allCases) { goal in
+                TogglePill(
+                    title: goal.title,
+                    isOn: Binding(
+                        get: { profile.skinGoals.contains(goal) },
+                        set: { profile.setSkinGoal(goal, enabled: $0) }
+                    )
+                )
+            }
+        }
+    }
+}
+
 private struct TogglePill: View {
     var title: String
     @Binding var isOn: Bool

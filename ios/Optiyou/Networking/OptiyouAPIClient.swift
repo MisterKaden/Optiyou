@@ -15,7 +15,12 @@ struct OptiyouAPIClient: Sendable {
 
     func scan(gtin: String, profile: UserNutritionProfile, source: ScanSource) async throws -> ScanLookupOutcome {
         var request = try jsonRequest(path: "/v1/scan", method: "POST")
-        request.httpBody = try JSONEncoder().encode(ScanRequest(gtin: gtin, source: source.apiValue, profile: ProfileRequest(profile: profile)))
+        request.httpBody = try JSONEncoder().encode(ScanRequest(
+            gtin: gtin,
+            source: source.apiValue,
+            profile: ProfileRequest(profile: profile),
+            skinPreferences: profile.skinGoals.map(\.apiValue).sorted()
+        ))
 
         let response: ScanResponse = try await send(request)
         return try response.lookupOutcome(profile: profile)
@@ -202,6 +207,7 @@ private struct ScanRequest: Encodable {
     var gtin: String
     var source: String
     var profile: ProfileRequest
+    var skinPreferences: [String]
 }
 
 private struct ProfileRequest: Encodable {
