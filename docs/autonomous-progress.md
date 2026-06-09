@@ -108,3 +108,15 @@ analytics. **Open:** repeat scans of an unverified product create duplicate cont
 - **Phase 6 photo pipeline** (BiRefNet → R2) — needs Workers AI / R2 runtime.
 - **Phase 7 premium/offline**, **Analytics Engine binding** (left out of `wrangler.jsonc` so deploys
   don't fail if the feature isn't enabled), **cosmetic CosIng/regulatory enrichment**.
+
+## 🚀 LAUNCHED (live, proven end-to-end) — 2026-06-07
+
+Deploy-authorized + secret-authorized (Option A). The full flow is **live in production**:
+- Backend deployed; **~840 real products** on prod D1 (USDA + skincare).
+- `AUTH_JWT_SECRET` + `UPLOAD_SIGNING_SECRET` set (strong random; rotate via `wrangler secret put`).
+- **Proven live** with a minted token (= what the app does after Apple Sign-In):
+  - Food (Trader Joe's Soup): OptiScore 57 / Fit 57 / "mixed" / reasons (sodium, ultra-processed).
+  - Cosmetic (Jergens): vertical=cosmetic, OptiScore 81 → **OptiFit 51 with fragrance_free** (personalization works), advisory shown.
+
+**Only remaining step is Kaden-only:** TestFlight / App Store submission (Apple account) to put the
+built, verified iOS app on a physical device. The backend + catalog + auth + full scan flow are live.
