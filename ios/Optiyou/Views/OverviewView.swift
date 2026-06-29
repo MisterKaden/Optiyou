@@ -17,7 +17,7 @@ struct OverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("My food")
-                    .font(.largeTitle.weight(.black))
+                    .font(.optiTitle)
                     .foregroundStyle(Color.optiInk)
 
                 VStack(spacing: 16) {
@@ -30,7 +30,7 @@ struct OverviewView: View {
                             .frame(width: 248, height: 248)
                         VStack(spacing: 2) {
                             Text("\(total)")
-                                .font(.system(size: 44, weight: .black, design: .rounded))
+                                .font(.optiNumeral(46))
                                 .foregroundStyle(Color.optiInk)
                             Text(total == 1 ? "scan" : "scans")
                                 .font(.caption.weight(.bold))
@@ -38,17 +38,10 @@ struct OverviewView: View {
                         }
                     }
                     .frame(maxWidth: .infinity)
-
-                    Picker("Scope", selection: .constant("food")) {
-                        Text("Food").tag("food")
-                        Text("Beauty later").tag("beauty")
-                    }
-                    .pickerStyle(.segmented)
-                    .disabled(true)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Grading overview")
+                    Text("Verdict overview")
                         .font(.caption.weight(.bold))
                         .textCase(.uppercase)
                         .foregroundStyle(Color.optiMuted)
@@ -83,11 +76,6 @@ struct OverviewView: View {
                             }
                         }
                     }
-
-                    Text("0 unknown products")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.optiMuted)
-                        .padding(.leading, 4)
                 }
             }
             .padding(16)
@@ -120,8 +108,9 @@ private struct OverviewPieChart: View {
                     .fill(segment.status.color)
             }
             Circle()
-                .fill(Color.optiBackground.opacity(0.26))
+                .fill(Color.optiBackground)
                 .frame(width: 152, height: 152)
+                .overlay(Circle().stroke(Color.optiLine, lineWidth: 1))
         }
         .accessibilityLabel("Food scan distribution")
     }

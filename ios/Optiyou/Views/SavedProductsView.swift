@@ -12,7 +12,7 @@ struct SavedProductsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Saved products")
-                    .font(.largeTitle.weight(.black))
+                    .font(.optiTitle)
                     .foregroundStyle(Color.optiInk)
 
                 if savedProducts.isEmpty {

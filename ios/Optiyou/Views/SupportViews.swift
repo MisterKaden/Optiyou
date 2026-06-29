@@ -6,19 +6,17 @@ struct AccountView: View {
 
     var body: some View {
         List {
-            Section("Personal information") {
-                LabeledContent("First name", value: "Kaden")
-                LabeledContent("Email", value: "kadenprete@live.com")
-                NavigationLink("Profile preferences") {
+            Section("Profile") {
+                NavigationLink("Preferences") {
                     ProfileView()
                 }
             }
 
-            Section("Subscription") {
+            Section("Membership") {
                 NavigationLink {
                     PremiumView()
                 } label: {
-                    Text(store.isPremium ? "Premium active" : "Become a Premium member")
+                    Text(store.isPremium ? "Premium active" : "Premium")
                 }
             }
 
@@ -75,28 +73,28 @@ struct HelpView: View {
 
             Section("General problems") {
                 NavigationLink("The scanner does not work") {
-                    HelpArticleView(title: "The scanner does not work", bodyText: "Check camera permission, lighting, barcode damage, and device support. You can always use manual search or contribute label photos.")
+                    HelpArticleView(title: "The scanner does not work", bodyText: "Check camera permission, lighting, and barcode condition. Search also works.")
                 }
                 NavigationLink("The product has no barcode") {
-                    HelpArticleView(title: "The product has no barcode", bodyText: "Use Scan Nutrition or Scan Ingredients to start a contribution with lower confidence until the label is reviewed.")
+                    HelpArticleView(title: "The product has no barcode", bodyText: "Search by name or add label photos.")
                 }
                 NavigationLink("Other problem") {
-                    HelpArticleView(title: "Other problem", bodyText: "Send a correction through the product options menu so the review queue can inspect it.")
+                    HelpArticleView(title: "Other problem", bodyText: "Send a correction from the product page.")
                 }
             }
 
             Section("About Optiyou") {
                 NavigationLink("What is Optiyou's mission?") {
-                    HelpArticleView(title: "What is Optiyou's mission?", bodyText: "Optiyou helps people understand packaged food labels and compare products without paid rankings or score manipulation.")
+                    HelpArticleView(title: "What is Optiyou's mission?", bodyText: "Optiyou helps you read labels and choose with confidence.")
                 }
                 NavigationLink("Is Optiyou independent?") {
-                    HelpArticleView(title: "Is Optiyou independent?", bodyText: "Recommendations are not paid placements. Scores come from deterministic methodology and approved evidence.")
+                    HelpArticleView(title: "Is Optiyou independent?", bodyText: "No paid placements. No sponsored swaps.")
                 }
                 NavigationLink("How are products rated?") {
-                    HelpArticleView(title: "How are products rated?", bodyText: "AI extracts and explains labels, but final OptiScore and OptiFit come from a versioned scoring engine.")
+                    HelpArticleView(title: "How are products rated?", bodyText: "OptiScore grades the product. OptiFit reflects your profile.")
                 }
                 NavigationLink("Other question") {
-                    HelpArticleView(title: "Other question", bodyText: "Ask Optiyou can explain product fields, reason codes, methodology, and approved evidence.")
+                    HelpArticleView(title: "Other question", bodyText: "Ask Optiyou from any result.")
                 }
             }
         }
@@ -120,7 +118,7 @@ private struct HelpArticleView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text(title)
-                    .font(.largeTitle.weight(.black))
+                    .font(.optiTitle)
                 Text(bodyText)
                     .font(.headline)
                     .foregroundStyle(Color.optiMuted)

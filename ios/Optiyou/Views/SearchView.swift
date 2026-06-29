@@ -15,7 +15,7 @@ struct SearchView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Search")
-                    .font(.largeTitle.weight(.black))
+                    .font(.optiTitle)
                     .foregroundStyle(Color.optiInk)
 
                 HStack(spacing: 10) {
@@ -27,7 +27,7 @@ struct SearchView: View {
                         .submitLabel(.search)
                 }
                 .padding(14)
-                .background(Color.optiLine.opacity(0.48))
+                .background(Color.optiLine.opacity(0.42))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -149,14 +149,15 @@ private struct SearchPremiumCard: View {
         SectionCard {
             VStack(spacing: 16) {
                 Text("Premium")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.semibold))
+                    .tracking(2.4)
                     .textCase(.uppercase)
-                    .foregroundStyle(Color.optiGreen)
-                Text("Search smarter with Optiyou")
-                    .font(.title2.weight(.black))
+                    .foregroundStyle(Color.optiAmber)
+                Text("Search with more precision")
+                    .font(.optiHeading)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Color.optiInk)
-                Text("Free search covers food basics. Premium adds family profiles, offline cache, pantry tools, and deeper AI explanations.")
+                Text("Family profiles, pantry tools, and deeper answers.")
                     .font(.headline)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Color.optiMuted)
@@ -166,9 +167,7 @@ private struct SearchPremiumCard: View {
                     Text("See premium")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .tint(Color.optiGreen)
+                .buttonStyle(OptiPrimaryButtonStyle())
             }
         }
         .padding(.top, 180)

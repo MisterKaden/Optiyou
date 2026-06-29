@@ -13,14 +13,22 @@ struct OnboardingView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Optiyou")
-                            .font(.system(size: 48, weight: .black, design: .rounded))
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("THE DISCERNING STANDARD")
+                            .font(.caption.weight(.semibold))
+                            .tracking(2.6)
+                            .foregroundStyle(Color.optiAmber)
+                        Text("OPTIYOU")
+                            .font(.system(size: 42, weight: .medium, design: .serif))
+                            .tracking(9)
                             .foregroundStyle(Color.optiInk)
-                        Text("Scan smarter. Choose better. Built around you.")
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(Color.optiGreen)
-                        Text("Set the signals that change recommendations. You can adjust these anytime.")
+                        Rectangle()
+                            .fill(Color.optiGoldSoft)
+                            .frame(width: 56, height: 1.5)
+                        Text("Built around you.")
+                            .font(.system(.title2, design: .serif).weight(.medium).italic())
+                            .foregroundStyle(Color.optiInk)
+                        Text("Choose what matters. Adjust anytime.")
                             .foregroundStyle(Color.optiMuted)
                     }
 
@@ -52,9 +60,7 @@ struct OnboardingView: View {
                         Label("Start scanning", systemImage: "barcode.viewfinder")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .tint(Color.optiGreen)
+                    .buttonStyle(OptiPrimaryButtonStyle())
                 }
                 .padding(20)
             }
@@ -132,16 +138,16 @@ private struct TogglePill: View {
                     .minimumScaleFactor(0.82)
                 Spacer(minLength: 0)
             }
-            .font(.subheadline.weight(.bold))
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(isOn ? Color.white : Color.optiInk)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .frame(minHeight: 46)
-            .background(isOn ? Color.optiGreen : Color.white)
+            .background(isOn ? Color.optiInk : Color.optiCard)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isOn ? Color.optiGreen : Color.optiLine, lineWidth: 1)
+                    .stroke(isOn ? Color.optiInk : Color.optiLine, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)

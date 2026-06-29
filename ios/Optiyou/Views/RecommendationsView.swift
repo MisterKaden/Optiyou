@@ -12,15 +12,15 @@ struct RecommendationsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Recommendations")
-                    .font(.largeTitle.weight(.black))
+                Text("Swaps")
+                    .font(.optiTitle)
                     .foregroundStyle(Color.optiInk)
 
                 if pairs.isEmpty {
                     EmptyStateView(
                         systemImage: "arrow.left.arrow.right.circle",
                         title: "No swaps yet",
-                        message: "Scan more foods and Optiyou will suggest higher-scoring same-category swaps."
+                        message: "Scan more foods to see better choices."
                     )
                 } else {
                     ForEach(pairs) { pair in
@@ -28,7 +28,7 @@ struct RecommendationsView: View {
                     }
                 }
 
-                Text("Recommendations are same-category, profile-aware, and never paid placements.")
+                Text("No paid placements. No sponsored swaps.")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.optiMuted)
                     .padding(.horizontal, 4)
@@ -36,7 +36,7 @@ struct RecommendationsView: View {
             .padding(16)
         }
         .background(Color.optiBackground.ignoresSafeArea())
-        .navigationTitle("Recs")
+        .navigationTitle("Swaps")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             AppInfoToolbar(openSheet: openSheet)
@@ -65,7 +65,7 @@ private struct RecommendationPairCard: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Why this swap is better")
-                        .font(.headline.weight(.black))
+                        .font(.headline.weight(.semibold))
                     ForEach(pair.reasons, id: \.self) { reason in
                         Label(reason, systemImage: "checkmark.circle")
                             .font(.subheadline.weight(.semibold))
@@ -90,7 +90,7 @@ private struct RecommendationPairCard: View {
                         .frame(width: 34, height: 34)
                         .overlay {
                             Image(systemName: marker)
-                                .font(.headline.weight(.black))
+                                .font(.headline.weight(.semibold))
                                 .foregroundStyle(.white)
                         }
                         .offset(x: -8, y: -8)

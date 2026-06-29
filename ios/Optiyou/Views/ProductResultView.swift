@@ -86,14 +86,14 @@ struct ProductResultView: View {
         case .avoid:
             safetyBannerView(
                 title: "Avoid for your profile",
-                detail: "Conflicts with a declared allergen or hard dietary restriction.",
+                detail: "Not a fit for your profile.",
                 systemImage: "xmark.octagon.fill",
                 color: .optiRed
             )
         case .caution:
             safetyBannerView(
                 title: "Use caution",
-                detail: "May not fit one of your dietary preferences.",
+                detail: "May not fit your preferences.",
                 systemImage: "exclamationmark.triangle.fill",
                 color: .optiAmber
             )
@@ -110,7 +110,7 @@ struct ProductResultView: View {
                     .foregroundStyle(color)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.headline.weight(.black))
+                        .font(.headline.weight(.semibold))
                         .foregroundStyle(color)
                     Text(detail)
                         .font(.footnote)
@@ -129,7 +129,7 @@ struct ProductResultView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text(product.name)
-                            .font(.title.weight(.black))
+                            .font(.system(.title, design: .serif).weight(.semibold))
                             .foregroundStyle(Color.optiInk)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(product.brand)
@@ -155,7 +155,7 @@ struct ProductResultView: View {
                     .font(.headline.weight(.bold))
                     .foregroundStyle(result.optiFit.status.color)
 
-                Text("Scores are deterministic. AI explains the label, but does not decide the score.")
+                Text("Evidence-led score. Personal fit.")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.optiMuted)
             }
@@ -167,7 +167,7 @@ struct ProductResultView: View {
             VStack(alignment: .leading, spacing: 14) {
                 if negativeDrivers.isEmpty == false {
                     Text("Negatives")
-                        .font(.title2.weight(.black))
+                        .font(.optiHeading)
                     ForEach(negativeDrivers) { reason in
                         DriverRow(reason: reason, value: nutritionValue(for: reason))
                     }
@@ -175,7 +175,7 @@ struct ProductResultView: View {
 
                 if positiveDrivers.isEmpty == false {
                     Text("Positives")
-                        .font(.title2.weight(.black))
+                        .font(.optiHeading)
                     ForEach(positiveDrivers) { reason in
                         DriverRow(reason: reason, value: nutritionValue(for: reason))
                     }
@@ -189,7 +189,7 @@ struct ProductResultView: View {
         if result.warnings.isEmpty == false {
             SectionCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Profile warnings")
+                    Text("Watch notes")
                         .font(.headline)
                     ForEach(result.warnings) { warning in
                         HStack(alignment: .top, spacing: 10) {
@@ -197,7 +197,7 @@ struct ProductResultView: View {
                                 .foregroundStyle(warning.severity.color)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(warning.title)
-                                    .font(.subheadline.weight(.black))
+                                    .font(.subheadline.weight(.semibold))
                                 Text(warning.detail)
                                     .font(.footnote)
                                     .foregroundStyle(Color.optiMuted)
@@ -244,7 +244,7 @@ struct ProductResultView: View {
         ResultDisclosureCard(title: "Additives", systemImage: "testtube.2") {
             let additives = product.ingredients.filter { $0.flags.subtracting([.addedSugar, .containsDairy, .containsGluten]).isEmpty == false }
             if additives.isEmpty {
-                Text("No major additive flags in this sample label.")
+                Text("No major additives flagged.")
                     .font(.footnote)
                     .foregroundStyle(Color.optiMuted)
             } else {
@@ -268,7 +268,7 @@ struct ProductResultView: View {
     private var allergensCard: some View {
         ResultDisclosureCard(title: "Allergens", systemImage: "exclamationmark.shield") {
             if product.allergens.isEmpty {
-                Text("No common allergen flags are present in the structured sample.")
+                Text("No common allergens flagged.")
                     .font(.footnote)
                     .foregroundStyle(Color.optiMuted)
             } else {
@@ -284,7 +284,7 @@ struct ProductResultView: View {
     private var preferencesCard: some View {
         ResultDisclosureCard(title: "Preferences", systemImage: "person.text.rectangle") {
             if store.profile.preferences.isEmpty {
-                Text("No preferences are active. OptiFit currently mirrors general product quality.")
+                Text("No preferences selected.")
                     .font(.footnote)
                     .foregroundStyle(Color.optiMuted)
             } else {
@@ -301,7 +301,7 @@ struct ProductResultView: View {
         ResultDisclosureCard(title: "Better Swaps", systemImage: "arrow.triangle.2.circlepath") {
             let swaps = product.serverAlternatives
             if swaps.isEmpty {
-                Text("No higher-scoring same-category swap is available from the live catalog yet.")
+                Text("No better swap yet.")
                     .font(.footnote)
                     .foregroundStyle(Color.optiMuted)
             } else {
@@ -322,7 +322,7 @@ struct ProductResultView: View {
                             }
                             Spacer()
                             Text("\(swap.optiFit)")
-                                .font(.title3.weight(.black))
+                                .font(.optiNumeral(22))
                                 .foregroundStyle(ScoreStatus(value: swap.optiFit).color)
                         }
                         ForEach(swap.whyBetter, id: \.self) { reason in
@@ -342,7 +342,7 @@ struct ProductResultView: View {
     private var optionsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Options")
-                .font(.title2.weight(.black))
+                .font(.optiHeading)
                 .foregroundStyle(Color.optiInk)
 
             SectionCard {
@@ -394,19 +394,18 @@ struct ProductResultView: View {
                 Label(explanation.suggestedQuestion, systemImage: "bubble.left.and.text.bubble.right")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
-            .tint(Color.optiGreen)
+            .buttonStyle(OptiSecondaryButtonStyle())
         }
     }
 
     private var processingExplanation: String {
         switch product.processingLevel {
         case .minimal:
-            "Shorter ingredient list and fewer processing markers."
+            "Short ingredient list. Fewer processing markers."
         case .moderate:
-            "Some processing is expected for packaged food, with no automatic penalty unless markers stack up."
+            "Moderate processing. No major marker."
         case .high:
-            "Multiple markers suggest heavier processing, which lowers the general score."
+            "Heavier processing lowers the score."
         }
     }
 
@@ -494,17 +493,17 @@ private struct ScoringMethodView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Scoring method")
-                    .font(.largeTitle.weight(.black))
+                    .font(.optiTitle)
                 SectionCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("Deterministic scoring engine", systemImage: "checkmark.shield")
-                        Label("AI explains labels and reason codes", systemImage: "sparkles")
-                        Label("No paid placements or score manipulation", systemImage: "hand.raised")
-                        Label("U.S. and Canada packaged food only", systemImage: "map")
+                        Label("Evidence-led score", systemImage: "checkmark.shield")
+                        Label("Label explanations", systemImage: "sparkles")
+                        Label("No paid placements", systemImage: "hand.raised")
+                        Label("U.S. and Canada labels", systemImage: "map")
                     }
                     .font(.headline.weight(.semibold))
                 }
-                Text("OptiScore reflects general product quality. OptiFit adjusts the result for your profile. Low-confidence extracted data is labeled and should not be treated as verified fact.")
+                Text("OptiScore grades the product. OptiFit reflects your profile. Low-confidence data is labeled.")
                     .font(.headline)
                     .foregroundStyle(Color.optiMuted)
             }
@@ -544,7 +543,7 @@ private struct IssueReportView: View {
             }
 
             Section {
-                Text("Corrections go to review before changing structured product truth.")
+                Text("We'll review it.")
                     .font(.footnote)
                     .foregroundStyle(Color.optiMuted)
             }
@@ -581,10 +580,10 @@ private struct ResultDisclosureCard<Content: View>: View {
                 .padding(.top, 12)
             } label: {
                 Label(title, systemImage: systemImage)
-                    .font(.headline.weight(.black))
+                    .font(.headline.weight(.semibold))
                     .foregroundStyle(Color.optiInk)
             }
-            .tint(Color.optiGreen)
+            .tint(Color.optiInk)
         }
     }
 }
@@ -596,15 +595,15 @@ private struct NutritionMetric: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
-                .font(.title3.weight(.black))
+                .font(.optiNumeral(20))
                 .foregroundStyle(Color.optiInk)
             Text(label)
-                .font(.caption.weight(.bold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.optiMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color.optiBackground)
+        .background(Color.optiBackground.opacity(0.7))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
@@ -616,7 +615,7 @@ private struct IngredientExplanationRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(ingredient.name.capitalized)
-                    .font(.subheadline.weight(.black))
+                    .font(.subheadline.weight(.semibold))
                 Spacer()
                 if ingredient.flags.isEmpty == false {
                     StatusBadge(title: "\(ingredient.flags.count) flag", systemImage: "flag", color: .optiAmber)
@@ -635,21 +634,21 @@ private struct IngredientExplanationRow: View {
 
     private var explanation: String {
         if ingredient.flags.contains(.artificialSweetener) {
-            return "Used for sweetness with fewer calories. Some users avoid it for taste, tolerance, or preference reasons. Evidence strength: preference-sensitive."
+            return "Sweetener. Preference-sensitive."
         }
 
         if ingredient.flags.contains(.syntheticDye) {
-            return "Used for color. Some households avoid synthetic dyes, especially for kids mode. Evidence strength: moderate for preference screening."
+            return "Color additive. Often screened by families."
         }
 
         if ingredient.flags.contains(.preservative) {
-            return "Used to extend shelf life. Usually permitted in food, but some users prefer fewer preservatives. Evidence strength: low to moderate."
+            return "Preservative. Some shoppers prefer fewer."
         }
 
         if ingredient.flags.contains(.addedSugar) {
-            return "Contributes sweetness and added sugar. It can conflict with low-sugar goals when total added sugar is high. Evidence strength: strong for nutrition context."
+            return "Adds sweetness and sugar."
         }
 
-        return "Recognized ingredient with no current Optiyou flag for this profile."
+        return "No current flag."
     }
 }

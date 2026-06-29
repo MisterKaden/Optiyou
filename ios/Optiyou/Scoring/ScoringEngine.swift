@@ -109,7 +109,7 @@ struct ScoringEngine {
         }
 
         if product.nutrition.addedSugarGrams >= 10 {
-            reasons.append(ScoreReason(title: "Added sugar", detail: "\(formatted(product.nutrition.addedSugarGrams))g added sugar lowers the product-quality score.", impact: .negative))
+            reasons.append(ScoreReason(title: "Added sugar", detail: "\(formatted(product.nutrition.addedSugarGrams))g added sugar lowers the score.", impact: .negative))
         }
 
         if product.processingLevel == .high {

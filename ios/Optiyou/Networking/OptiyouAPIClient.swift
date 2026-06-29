@@ -328,7 +328,7 @@ private struct ScanResponse: Decodable {
             id: contribution?.id ?? UUID().uuidString,
             gtin: product?.gtin ?? "",
             status: message ?? contribution?.status ?? "Awaiting label photos",
-            confidenceLabel: "Low confidence until reviewed",
+            confidenceLabel: "Label photos needed",
             uploads: uploadTargets.isEmpty ? uploadKinds.map { ContributionUpload(kind: $0) } : uploadTargets
         )
     }
@@ -386,7 +386,7 @@ private struct ContributionResponse: Decodable {
             id: contribution?.id ?? UUID().uuidString,
             gtin: product?.gtin ?? "",
             status: contribution?.status ?? "Awaiting label photos",
-            confidenceLabel: "Low confidence until reviewed",
+            confidenceLabel: "Label photos needed",
             uploads: uploadTargets.isEmpty ? (kinds.isEmpty ? ContributionDraft.PhotoKind.allCases : kinds).map { ContributionUpload(kind: $0) } : uploadTargets
         )
     }
@@ -773,7 +773,7 @@ private extension ScoreReason {
         case "ING_PRESERVATIVE":
             self.init(title: "Preservative", detail: "A preservative flag appears in the ingredient list.", impact: .negative)
         case "ING_ULTRA_PROCESSED_MARKER", "PROCESSING_HIGH":
-            self.init(title: "Processing", detail: "Processing markers lower the product-quality score.", impact: .negative)
+            self.init(title: "Processing", detail: "Processing markers lower the score.", impact: .negative)
         case "PROCESSING_MINIMAL":
             self.init(title: "Processing", detail: "Fewer processing markers support the score.", impact: .positive)
         case "PREF_LOW_SUGAR_CONFLICT":
@@ -781,7 +781,7 @@ private extension ScoreReason {
         case "PREF_HIGH_PROTEIN_GAP":
             self.init(title: "Protein gap", detail: "This is lower protein than your selected profile prefers.", impact: .negative)
         default:
-            self.init(title: reasonCode.lowercased().replacingOccurrences(of: "_", with: " "), detail: "Server reason code: \(reasonCode)", impact: .neutral)
+            self.init(title: "Additional factor", detail: "Included in this verdict.", impact: .neutral)
         }
     }
 }

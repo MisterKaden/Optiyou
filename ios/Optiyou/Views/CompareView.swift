@@ -11,9 +11,9 @@ struct CompareView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Compare")
-                    .font(.largeTitle.weight(.black))
+                    .font(.optiTitle)
                     .foregroundStyle(Color.optiInk)
-                Text("Same-category comparison keeps swaps honest and avoids paid placement logic.")
+                Text("Compare products side by side.")
                     .font(.headline)
                     .foregroundStyle(Color.optiMuted)
 
@@ -25,7 +25,7 @@ struct CompareView: View {
                 SectionCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Why Optiyou prefers \(right.name)")
-                            .font(.headline.weight(.black))
+                            .font(.headline.weight(.semibold))
                         Label("Less added sugar", systemImage: "minus.circle")
                         Label("Higher fiber", systemImage: "plus.circle")
                         Label("No synthetic dye flag", systemImage: "checkmark.circle")
@@ -50,7 +50,7 @@ struct CompareView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     ProductThumbnail(product: product, size: 72)
                     Text(product.name)
-                        .font(.headline.weight(.black))
+                        .font(.headline.weight(.semibold))
                         .foregroundStyle(Color.optiInk)
                         .fixedSize(horizontal: false, vertical: true)
                     ScoreDial(label: "OptiFit", score: score.optiFit)

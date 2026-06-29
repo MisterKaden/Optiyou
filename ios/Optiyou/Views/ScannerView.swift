@@ -61,7 +61,7 @@ struct ScannerView: View {
             }
         } else {
             LinearGradient(
-                colors: [Color.black, Color.optiInk, Color.black],
+                colors: [Color.black, Color(red: 0.05, green: 0.09, blue: 0.07), Color.black],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -85,13 +85,17 @@ struct ScannerView: View {
             Spacer()
 
             VStack(spacing: 18) {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.white, lineWidth: 3)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(
+                        Color.optiGoldSoft,
+                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [26, 18])
+                    )
                     .frame(height: 210)
                     .padding(.horizontal, 38)
+                    .shadow(color: Color.optiGoldSoft.opacity(0.4), radius: 10)
                 VStack(spacing: 8) {
                     Text(sessionState.title)
-                        .font(.headline.weight(.black))
+                        .font(.headline.weight(.semibold))
                     Text(sessionState.detail)
                         .font(.caption.weight(.semibold))
                         .multilineTextAlignment(.center)
@@ -124,11 +128,10 @@ struct ScannerView: View {
             Button {
                 openSheet(.contribute)
             } label: {
-                Label("No barcode? Contribute label photos", systemImage: "camera.viewfinder")
+                Label("Add label photos", systemImage: "camera.viewfinder")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
-            .tint(.white)
+            .buttonStyle(OptiNoirButtonStyle())
         }
         .padding(16)
         .background(.black.opacity(0.72))
@@ -151,13 +154,12 @@ struct ScannerView: View {
                 Image(systemName: systemImage)
                     .font(.headline.weight(.bold))
                 Text(title)
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.semibold))
             }
             .frame(maxWidth: .infinity)
             .frame(height: 58)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(Color.optiGreen)
+        .buttonStyle(OptiNoirButtonStyle())
     }
 
     private func handleDetectedBarcode(_ rawBarcode: String) {
@@ -230,9 +232,9 @@ struct ScannerView: View {
 
     private var unavailableScannerMessage: String {
         if DataScannerViewController.isSupported == false {
-            return "This device does not support live data scanning. Use search or label-photo contribution."
+            return "Live scan is unavailable. Search or add label photos."
         }
-        return "Camera permission is blocked or restricted. Enable camera access, or use search and label-photo contribution."
+        return "Enable camera access, or use search."
     }
 }
 
@@ -313,10 +315,10 @@ struct ContributionDraftSheet: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Help Optiyou learn this product")
-                    .font(.largeTitle.weight(.black))
+                Text("Add this product")
+                    .font(.optiTitle)
                     .foregroundStyle(Color.optiInk)
-                Text("Barcode \(draft.gtin) is not in the verified food catalog yet.")
+                Text("Barcode \(draft.gtin) is new to Optiyou.")
                     .font(.headline)
                     .foregroundStyle(Color.optiMuted)
 
@@ -332,20 +334,16 @@ struct ContributionDraftSheet: View {
                 if let uploadErrorMessage {
                     Text(uploadErrorMessage)
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.optiRed)
                 } else if allPhotosUploaded {
-                    Text("All photos uploaded. This contribution is ready for review.")
+                    Text("Ready for review.")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Color.optiGreen)
                 } else {
-                    Text("AI can extract the label, but Optiyou marks the result as estimated until data quality improves.")
+                    Text("Add each required photo.")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Color.optiMuted)
                 }
-
-                Text("Contribution \(draft.id)")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Color.optiMuted)
 
                 Spacer()
             }
@@ -393,8 +391,7 @@ struct ContributionDraftSheet: View {
                 Button("Capture") {
                     captureKind = photo
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.optiGreen)
+                .buttonStyle(OptiPrimaryButtonStyle(expands: false, minHeight: 38))
                 .disabled(draft.upload(for: photo)?.url == nil)
             }
         }

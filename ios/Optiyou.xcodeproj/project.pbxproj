@@ -21,6 +21,7 @@
 		A47EB1EC6415568DA78C79BE /* OptiyouAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF79DE55AA322B054EA36746 /* OptiyouAPIClient.swift */; };
 		AB8D9366E9A331620DCFA4DE /* ScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6542791EAE72CAB266BDB186 /* ScannerView.swift */; };
 		B7D2A51EAE7FE6C0261F165F /* ScoringEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 413F41F42BB1A9E87FC974D0 /* ScoringEngine.swift */; };
+		C04A32619CC8EEFFF2572C59 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EE8F7038A8140C6356BAADC5 /* Assets.xcassets */; };
 		CBF773069B08357C901B724B /* CompareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BA0DCDA6AAA93DD907C9BA1 /* CompareView.swift */; };
 		D220FEFE2E24FD2426B04D17 /* ScoringEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E128BA79D9CDA1C3901D5AC /* ScoringEngineTests.swift */; };
 		DCECF88644450D8C527FF3F6 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76A612735704571DE967DC55 /* AppStore.swift */; };
@@ -62,6 +63,7 @@
 		DBA163A14016B5650536F716 /* ProductResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductResultView.swift; sourceTree = "<group>"; };
 		E80A7161F5FBDCE55587F5FA /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		EC324385F86D5E8B2CA96919 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		EE8F7038A8140C6356BAADC5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FF79DE55AA322B054EA36746 /* OptiyouAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptiyouAPIClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -78,6 +80,7 @@
 		1533F5CD1BB34C9829354C8D /* Optiyou */ = {
 			isa = PBXGroup;
 			children = (
+				EE8F7038A8140C6356BAADC5 /* Assets.xcassets */,
 				266C9490BBDF03A5646A0F4E /* Info.plist */,
 				344C41975B0653709AAB5DB4 /* OptiyouApp.swift */,
 				DABF2E80195156B4EEAD97FC /* App */,
@@ -201,6 +204,7 @@
 			buildConfigurationList = 6A4D2CE66B8341CB64E995CC /* Build configuration list for PBXNativeTarget "Optiyou" */;
 			buildPhases = (
 				C627393CC3A76D7870814A47 /* Sources */,
+				F15BEF106B2A22E40AC5CB0A /* Resources */,
 			);
 			buildRules = (
 			);
@@ -243,6 +247,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F15BEF106B2A22E40AC5CB0A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C04A32619CC8EEFFF2572C59 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		C347C3ED85489A6CCDCCF677 /* Sources */ = {
@@ -301,7 +316,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = co.optiyou.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wintenai.optiyou;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -318,7 +333,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = co.optiyou.app.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wintenai.optiyou.tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Optiyou.app/Optiyou";
@@ -336,7 +351,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = co.optiyou.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wintenai.optiyou;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -353,7 +368,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = co.optiyou.app.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wintenai.optiyou.tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Optiyou.app/Optiyou";

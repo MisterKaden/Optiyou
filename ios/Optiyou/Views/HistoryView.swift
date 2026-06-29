@@ -21,7 +21,7 @@ struct HistoryView: View {
                         Text(showsFavoritesOnly ? "All scans" : "Favorites")
                     }
                     .font(.headline.weight(.semibold))
-                    .foregroundStyle(Color.optiGreen)
+                    .foregroundStyle(Color.optiInk)
 
                     Spacer()
 
@@ -31,11 +31,11 @@ struct HistoryView: View {
                         Text(isEditingHistory ? "OK" : "Edit")
                     }
                     .font(.headline.weight(.bold))
-                    .foregroundStyle(Color.optiGreen)
+                    .foregroundStyle(Color.optiInk)
                 }
 
                 Text(showsFavoritesOnly ? "Favorites" : "History")
-                    .font(.largeTitle.weight(.black))
+                    .font(.optiTitle)
                     .foregroundStyle(Color.optiInk)
 
                 if visibleHistory.isEmpty {
@@ -47,7 +47,7 @@ struct HistoryView: View {
                         EmptyStateView(
                             systemImage: showsFavoritesOnly ? "bookmark" : "clock",
                             title: showsFavoritesOnly ? "No favorites yet" : "No scans yet",
-                            message: store.historyErrorMessage ?? (showsFavoritesOnly ? "Save products from a result page to keep them close." : "Scanned foods will appear here with their source and latest score.")
+                            message: store.historyErrorMessage ?? (showsFavoritesOnly ? "Save products from a result page." : "Scanned foods will appear here.")
                         )
                     }
                 } else {
@@ -68,11 +68,11 @@ struct HistoryView: View {
                                 ProductListRow(
                                     product: event.product,
                                     score: event.product.score(profile: store.profile),
-                                    subtitle: "Contribution pending - \(relativeDate(event.date))",
+                                    subtitle: "Review pending - \(relativeDate(event.date))",
                                     showsChevron: false
                                 )
                                 .padding(.vertical, 10)
-                                .background(Color.white)
+                                .background(Color.optiCard)
                             } else {
                                 Button {
                                     openProduct(event.product)
@@ -84,7 +84,7 @@ struct HistoryView: View {
                                         showsChevron: isEditingHistory == false
                                     )
                                     .padding(.vertical, 10)
-                                    .background(Color.white)
+                                    .background(Color.optiCard)
                                 }
                                 .buttonStyle(.plain)
                             }

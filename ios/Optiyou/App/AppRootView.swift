@@ -6,7 +6,7 @@ struct AppRootView: View {
 
     var body: some View {
         Group {
-            if hasCompletedOnboarding {
+            if hasCompletedOnboarding || Self.launchOverrideSkipsOnboarding {
                 MainTabView()
             } else {
                 OnboardingView(profile: store.profile) { profile in
@@ -16,21 +16,44 @@ struct AppRootView: View {
             }
         }
     }
+
+    // Launch-environment hooks for screenshot automation and UI tests (no effect in release builds).
+    static var launchOverrideSkipsOnboarding: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["OPTIYOU_SKIP_ONBOARDING"] == "1"
+        #else
+        false
+        #endif
+    }
 }
 
 private struct MainTabView: View {
     @EnvironmentObject private var store: AppStore
-    @State private var selectedTab: AppTab = .scan
+    @State private var selectedTab: AppTab = MainTabView.initialTab
     @State private var activeSheet: AppSheet?
+
+    private static var initialTab: AppTab {
+        #if DEBUG
+        switch ProcessInfo.processInfo.environment["OPTIYOU_TAB"] {
+        case "history": .history
+        case "recs": .recommendations
+        case "overview": .overview
+        case "search": .search
+        default: .scan
+        }
+        #else
+        .scan
+        #endif
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
             HistoryTab(openSheet: showSheet)
-                .tabItem { Label("History", systemImage: "carrot") }
+                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
                 .tag(AppTab.history)
 
             RecommendationsTab(openSheet: showSheet)
-                .tabItem { Label("Recs", systemImage: "arrow.left.arrow.right.circle") }
+                .tabItem { Label("Swaps", systemImage: "arrow.left.arrow.right.circle") }
                 .tag(AppTab.recommendations)
 
             ScannerTab(openSheet: showSheet)
@@ -45,7 +68,7 @@ private struct MainTabView: View {
                 .tabItem { Label("Search", systemImage: "magnifyingglass") }
                 .tag(AppTab.search)
         }
-        .tint(Color.optiGreen)
+        .tint(Color.optiInk)
         .sheet(item: $activeSheet) { sheet in
             NavigationStack {
                 sheet.destination
@@ -63,7 +86,14 @@ private struct MainTabView: View {
 
 private struct ScannerTab: View {
     var openSheet: (AppSheet) -> Void
-    @State private var path: [Product] = []
+    @State private var path: [Product] = {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["OPTIYOU_DEMO_PRODUCT"] == "1" {
+            return [SampleCatalog.products[0]]
+        }
+        #endif
+        return []
+    }()
 
     var body: some View {
         NavigationStack(path: $path) {

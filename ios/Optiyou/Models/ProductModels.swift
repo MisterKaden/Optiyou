@@ -235,10 +235,10 @@ enum DataQuality: String, Hashable {
 
     var label: String {
         switch self {
-        case .verifiedDatabase: "Verified database"
-        case .openFoodFacts: "Open product data"
-        case .communitySubmission: "Community submission"
-        case .userPhotoExtraction: "User photo extraction"
+        case .verifiedDatabase: "Verified"
+        case .openFoodFacts: "Open data"
+        case .communitySubmission: "Community"
+        case .userPhotoExtraction: "Photo scan"
         }
     }
 
@@ -301,11 +301,11 @@ extension Product {
                 label: "Awaiting review",
                 detail: "Label photos are needed before Optiyou can score this product."
             ),
-            verdict: "This product is waiting for contribution review.",
+            verdict: "Add label photos to score this product.",
             reasons: [
                 ScoreReason(
                     title: "Missing product",
-                    detail: "Optiyou has the scan, but not enough verified label data yet.",
+                    detail: "Label photos are needed.",
                     impact: .neutral
                 )
             ],
@@ -431,11 +431,11 @@ enum ScanSessionState: Equatable {
         case .scanning:
             "Hold the barcode inside the frame. Detection is automatic."
         case let .processing(gtin):
-            "Looking up \(gtin) with your profile."
+            "Checking \(gtin)."
         case let .productFound(gtin):
             "Loaded \(gtin)."
         case let .unknownProduct(gtin):
-            "\(gtin) needs a label contribution before confidence can improve."
+            "Add label photos for \(gtin)."
         case let .unavailable(reason):
             reason
         case let .failed(message):
@@ -588,7 +588,7 @@ struct ContributionDraft: Identifiable, Hashable {
             id: "draft-\(gtin)",
             gtin: gtin,
             status: "Awaiting label photos",
-            confidenceLabel: "Low confidence until reviewed",
+            confidenceLabel: "Label photos needed",
             requiredPhotos: PhotoKind.allCases
         )
     }
