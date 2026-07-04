@@ -1,92 +1,285 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Optiyou | Is it right for you? Food &amp; skincare scanner</title>
+    <title>Optiyou — Unlock your optimal you</title>
     <meta
       name="description"
-      content="Optiyou scans U.S. &amp; Canada food and skincare barcodes and tells you whether a product is a smart choice for you — with an OptiScore, a personalized OptiFit, honest confidence, and a clear why. No fear-mongering. Coming to iPhone."
+      content="Optiyou scans U.S. &amp; Canada food and skincare barcodes and renders a considered, evidence-graded verdict — an OptiScore, a personalized OptiFit, honest confidence, and a clear why. Optimize you. Feel alive every day."
     />
-    <meta property="og:title" content="Optiyou — is it right for you?" />
+    <meta property="og:title" content="Optiyou — unlock your optimal you" />
     <meta
       property="og:description"
-      content="Scan food &amp; skincare. Get a score, a fit for your goals, and a clear why. Built around you, not one number."
+      content="Scan food &amp; skincare. Receive a considered verdict: a score, a fit for your goals, and a clear why. Built around you, not one number."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://optiyou.co" />
     <meta property="og:image" content="/optiyou-preview.svg" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/styles.css" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("optiyou-theme");
+          if (t) document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
+    <div class="cursor-glow" aria-hidden="true"></div>
+
+    <nav class="site-nav" id="nav" aria-label="Primary">
+      <a class="wordmark" href="/">
+        <img src="/favicon.svg" alt="" aria-hidden="true" />
+        <span>Optiyou</span>
+      </a>
+      <div class="nav-links">
+        <a href="#standard">The Standard</a>
+        <a href="#method">The Method</a>
+        <a href="#fitcheck">Fit Check</a>
+        <a href="#stories">Stories</a>
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle light and dark mode">◐</button>
+        <a href="#signup" class="button primary">Request access</a>
+      </div>
+    </nav>
+
     <main class="shell">
-      <section class="hero" aria-labelledby="page-title">
+      <header class="hero" aria-labelledby="page-title">
+        <canvas id="field" aria-hidden="true"></canvas>
         <div class="hero-copy">
-          <p class="eyebrow">Food &amp; skincare scanner · iPhone</p>
-          <h1 id="page-title">Optiyou</h1>
-          <p class="lede">
-            Most scanners give every person the same number. Optiyou tells you
-            whether a <strong>food or skincare</strong> product is a smart choice
-            <strong>for you</strong> — and shows exactly why, with honest
-            confidence and zero fear-mongering.
+          <p class="eyebrow" data-reveal>Optimize you — feel alive every day</p>
+          <h1 id="page-title">
+            <span class="line"><span>Unlock your</span></span>
+            <span class="line"><span><em>optimal</em> you.</span></span>
+          </h1>
+          <p class="lede" data-reveal>
+            Optiyou scans any <strong>food or skincare</strong> product and renders a
+            considered, evidence-graded verdict — fitted to your goals, your
+            sensitivities, your standard. Honest confidence. Zero fear-mongering.
           </p>
-          <div class="promise-list" aria-label="What you get">
-            <span>OptiScore</span>
-            <span>OptiFit</span>
-            <span>Confidence</span>
+          <div class="actions" data-reveal aria-label="Primary links">
+            <a href="#signup" class="button primary pulse" data-magnetic>Start your journey</a>
+            <a href="#method" class="button secondary" data-magnetic>Explore the method</a>
           </div>
-          <div class="actions" aria-label="Primary links">
-            <a href="mailto:hello@optiyou.co?subject=Optiyou%20waitlist" class="button primary">Join the waitlist</a>
-            <a href="#how" class="button secondary">See how it works</a>
-          </div>
-          <p class="fine">Launching first on iPhone. Android to follow.</p>
+          <p class="fine" data-reveal>Launching first on iPhone. Android to follow.</p>
         </div>
-        <div class="signal-panel" aria-label="Optiyou scan result preview">
-          <img src="/optiyou-preview.svg" alt="Optiyou scan result preview" />
+
+        <div class="orb-stage" aria-label="Vitality score demonstration">
+          <div class="orb" id="orb">
+            <svg viewBox="0 0 300 300" aria-hidden="true">
+              <defs>
+                <linearGradient id="arcGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" style="stop-color: var(--emerald-glow)" />
+                  <stop offset="100%" style="stop-color: var(--gold)" />
+                </linearGradient>
+              </defs>
+              <g class="ring-rotor">
+                <circle class="ring-faint" cx="150" cy="150" r="142" fill="none" stroke-opacity="0.4" stroke-width="1" stroke-dasharray="2 10" />
+              </g>
+              <g class="ring-rotor reverse">
+                <circle class="ring-emerald" cx="150" cy="150" r="128" fill="none" stroke-opacity="0.35" stroke-width="1" stroke-dasharray="60 14 8 14" />
+              </g>
+              <circle class="ring-track" cx="150" cy="150" r="112" fill="none" stroke-width="6" />
+              <circle id="orb-arc" cx="150" cy="150" r="112" fill="none" stroke="url(#arcGrad)" stroke-width="6" stroke-linecap="round"
+                stroke-dasharray="703.7" stroke-dashoffset="703.7" transform="rotate(-90 150 150)" />
+            </svg>
+            <div class="orb-core">
+              <span class="score" id="orb-score">0</span>
+              <span class="label">Vitality · OptiScore</span>
+            </div>
+          </div>
+          <div class="orb-chip c1" data-reveal><span class="dot emerald"></span><span><strong>OptiFit 94</strong> · matches your goals</span></div>
+          <div class="orb-chip c2" data-reveal><span class="dot gold"></span><span>No allergen conflicts</span></div>
+          <div class="orb-chip c3" data-reveal><span class="dot emerald"></span><span>Evidence-graded · high confidence</span></div>
+        </div>
+
+        <div class="scroll-cue" aria-hidden="true">Scroll</div>
+      </header>
+    </main>
+
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track">
+        <span>OptiScore <i>·</i> OptiFit <i>·</i> Evidence-graded <i>·</i> Honest confidence <i>·</i> Food &amp; skincare <i>·</i> Built around you <i>·</i></span>
+        <span>OptiScore <i>·</i> OptiFit <i>·</i> Evidence-graded <i>·</i> Honest confidence <i>·</i> Food &amp; skincare <i>·</i> Built around you <i>·</i></span>
+      </div>
+    </div>
+
+    <main class="shell">
+      <section id="standard" class="features" aria-label="The Optiyou standard">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">The Standard</p>
+          <h2>One number flatters everyone.<br />A verdict is <em>fitted</em>.</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card" data-reveal data-tilt>
+            <div class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.6-9.5-9A5.5 5.5 0 0 1 12 6.5 5.5 5.5 0 0 1 21.5 12c-2.5 4.4-9.5 9-9.5 9z"/></svg>
+            </div>
+            <h3>Personally fitted</h3>
+            <p>Your diet, skin goals, allergens, and preferences shape every verdict. The same product can be right for one person and wrong for another — Optiyou says which, for you.</p>
+          </article>
+          <article class="feature-card" data-reveal data-tilt>
+            <div class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 4.4-3.2 8-8 9-4.8-1-8-4.6-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
+            </div>
+            <h3>Graded, not guessed</h3>
+            <p>Scores move on verified facts and graded evidence — never influencer hype. Contested ingredients are explained with care, not used to frighten you.</p>
+          </article>
+          <article class="feature-card" data-reveal data-tilt>
+            <div class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 3-2 5-2 7H7c0-2-2-4-2-7a7 7 0 0 1 7-7z"/><path d="M9 20h6M10 22h4"/></svg>
+            </div>
+            <h3>Pantry &amp; vanity</h3>
+            <p>One considered standard for the kitchen and the bathroom shelf. Packaged food and personal care, across the U.S. and Canada.</p>
+          </article>
+          <article class="feature-card" data-reveal data-tilt>
+            <div class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 10h16M10 4v16"/></svg>
+            </div>
+            <h3>Never sponsored</h3>
+            <p>Finer alternatives are ranked by evidence and fit — never by who paid. No placements, no rankings for sale, no compromises.</p>
+          </article>
         </div>
       </section>
 
-      <section class="pillars" aria-label="Why Optiyou">
-        <article>
-          <span>For you</span>
-          <h2>Personalized fit</h2>
-          <p>Set your diet and skin goals, allergens, and preferences. The same product can be great for one person and wrong for another — Optiyou says which.</p>
-        </article>
-        <article>
-          <span>Honest</span>
-          <h2>Evidence, not fear</h2>
-          <p>Scores move on verified facts and graded evidence — not influencer hype. Contested ingredients are explained, not used to scare you.</p>
-        </article>
-        <article>
-          <span>Both</span>
-          <h2>Food &amp; skincare</h2>
-          <p>One app for the pantry and the bathroom shelf. Packaged food and personal-care products, U.S. and Canada.</p>
-        </article>
+      <section id="method" class="method" aria-label="How Optiyou works">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">The Method</p>
+          <h2>Three movements.<br />One <em>considered</em> answer.</h2>
+        </div>
+        <div class="method-steps" id="method-steps">
+          <div class="method-progress" id="method-progress"></div>
+          <div class="step" data-reveal>
+            <span class="num">01</span>
+            <div>
+              <h3>Present</h3>
+              <p>Hold your camera to any food or skincare barcode. A moment is all it takes.</p>
+            </div>
+          </div>
+          <div class="step" data-reveal>
+            <span class="num">02</span>
+            <div>
+              <h3>Understand</h3>
+              <p>Deterministic scores, a plain-language why, advisories, and an honest confidence level — composed, never alarmist.</p>
+            </div>
+          </div>
+          <div class="step" data-reveal>
+            <span class="num">03</span>
+            <div>
+              <h3>Refine</h3>
+              <p>Finer, same-category alternatives — never paid rankings, never sponsored placements.</p>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section id="how" class="pillars" aria-label="How Optiyou works">
-        <article>
-          <span>01</span>
-          <h2>Scan</h2>
-          <p>Point your camera at a food or skincare barcode.</p>
-        </article>
-        <article>
-          <span>02</span>
-          <h2>Understand</h2>
-          <p>Deterministic scores, a plain-language why, advisories, and an honest confidence level.</p>
-        </article>
-        <article>
-          <span>03</span>
-          <h2>Choose</h2>
-          <p>Better, same-category alternatives — never paid rankings or sponsored placements.</p>
-        </article>
+      <section id="fitcheck" class="fitcheck" aria-label="Quick fit check">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">Try it now</p>
+          <h2>A thirty-second <em>fit check</em>.</h2>
+        </div>
+        <div class="fitcheck-panel" data-reveal>
+          <div>
+            <p class="lede" style="margin-top:0">Choose what you're optimizing. Watch how the same granola bar scores differently — for <strong>you</strong>.</p>
+            <div class="chips" id="chips" role="group" aria-label="Choose your goals">
+              <button class="chip" type="button" data-w="-18">Low sugar</button>
+              <button class="chip" type="button" data-w="-9">Heart health</button>
+              <button class="chip" type="button" data-w="6">Sustained energy</button>
+              <button class="chip" type="button" data-w="-14">Clear skin</button>
+              <button class="chip" type="button" data-w="-11">Sensitive skin</button>
+              <button class="chip" type="button" data-w="8">Muscle &amp; recovery</button>
+            </div>
+            <p class="fine">Demonstration only — the app grades real products against your full profile.</p>
+          </div>
+          <div class="fit-result">
+            <div class="dials">
+              <div class="dial">
+                <svg viewBox="0 0 120 120">
+                  <circle class="track" cx="60" cy="60" r="52" />
+                  <circle class="arc" id="dial-score-arc" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="326.7" />
+                </svg>
+                <span class="val" id="dial-score">—</span>
+                <span class="cap">OptiScore</span>
+              </div>
+              <div class="dial">
+                <svg viewBox="0 0 120 120">
+                  <circle class="track" cx="60" cy="60" r="52" />
+                  <circle class="arc" id="dial-fit-arc" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="326.7" />
+                </svg>
+                <span class="val" id="dial-fit">—</span>
+                <span class="cap">OptiFit</span>
+              </div>
+            </div>
+            <p class="fit-verdict" id="fit-verdict">Select a goal to render your verdict.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="stories" class="stories" aria-label="Stories">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">Stories</p>
+          <h2>Quiet confidence, <em>every aisle</em>.</h2>
+        </div>
+        <div class="story-stage" data-reveal id="story-stage">
+          <figure class="story on">
+            <blockquote>"It's the first scanner that didn't shout at me. It explained — and then it showed me something better."</blockquote>
+            <figcaption>Early access · Toronto</figcaption>
+          </figure>
+          <figure class="story">
+            <blockquote>"My daughter's allergens, my training goals, one app. The fit score is the number I never knew I needed."</blockquote>
+            <figcaption>Early access · Austin</figcaption>
+          </figure>
+          <figure class="story">
+            <blockquote>"Skincare labels finally make sense. Contested ingredients are explained like a clinician would, not a headline."</blockquote>
+            <figcaption>Early access · Vancouver</figcaption>
+          </figure>
+        </div>
+        <div class="story-dots" id="story-dots" role="tablist" aria-label="Choose story">
+          <button class="on" type="button" aria-label="Story 1"></button>
+          <button type="button" aria-label="Story 2"></button>
+          <button type="button" aria-label="Story 3"></button>
+        </div>
+      </section>
+
+      <section class="invitation" data-reveal aria-label="Join the waitlist">
+        <p class="eyebrow">By invitation, then for everyone</p>
+        <h2>Raise the standard for everything you eat and apply.</h2>
+        <p>Join the waitlist and be among the first to carry Optiyou. Your goals, your sensitivities, your standard — rendered in every scan.</p>
+        <form class="signup" id="signup" aria-label="Waitlist signup">
+          <input type="email" id="signup-email" placeholder="your@email.com" required aria-label="Email address" />
+          <button class="button primary" type="submit">Join the waitlist</button>
+        </form>
+        <p class="signup-status" id="signup-status" role="status" aria-live="polite"></p>
       </section>
 
       <footer class="site-foot">
-        <p>The healthiest choice isn't one ideology or one number — it's product quality, ingredient evidence, and personal fit. Optiyou is label education, not medical advice.</p>
-        <p><a href="mailto:hello@optiyou.co">hello@optiyou.co</a> · <a href="/_health">System status</a></p>
+        <div class="foot-grid">
+          <a class="wordmark" href="/">
+            <img src="/favicon.svg" alt="" aria-hidden="true" />
+            <span>Optiyou</span>
+          </a>
+          <div class="foot-links">
+            <a href="#standard">The Standard</a>
+            <a href="#method">The Method</a>
+            <a href="#fitcheck">Fit Check</a>
+            <a href="mailto:hello@optiyou.co">Contact</a>
+            <a href="/_health">Status</a>
+          </div>
+        </div>
+        <p class="legal">The healthiest choice isn't one ideology or one number — it's product quality, ingredient evidence, and personal fit. Optiyou is label education, not medical advice. © 2026 Optiyou.</p>
       </footer>
     </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js" defer></script>
+    <script src="/app.js" defer></script>
   </body>
 </html>

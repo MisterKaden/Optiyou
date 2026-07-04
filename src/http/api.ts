@@ -1,4 +1,4 @@
-import { buildContributionIntent, verifyUploadToken } from "../contributions/contribution-intent.ts";
+import { buildContributionIntent, verifyUploadToken, type VerifiedUploadToken } from "../contributions/contribution-intent.ts";
 import { buildProductCard } from "../products/product-card.ts";
 import { buildCosmeticCard } from "../cosmetics/product-card.ts";
 import { scoreCosmeticProduct } from "../cosmetics/scoring.ts";
@@ -16,6 +16,7 @@ import { includeUnverified, isUserVisible, visibilityLabel } from "../platform/v
 import { planRefresh } from "../ingestion/refresh.ts";
 import {
   createContributionShell,
+  createWaitlistSignup,
   ensureUser,
   findProductByGtin,
   getAdminMetrics,
@@ -23,14 +24,22 @@ import {
   listContributionReviewQueue,
   listEvidenceCards,
   listScanHistory,
+  listWaitlistSignups,
   loadProfile,
   markUploadReceived,
   recordScan,
   reviewContribution,
-  searchProducts
+  searchProducts,
+  type WaitlistSignup
 } from "../platform/repository.ts";
-import { errorResponse, HttpError, jsonResponse, readJsonBody } from "./responses.ts";
-import type { FoodProduct, PersonalizationProfile, ProductCard, ScanRequestBody } from "../platform/types.ts";
+import { errorResponse, HttpError, jsonResponse, readJsonBody, withResponseHeaders } from "./responses.ts";
+import type {
+  ContributionArtifactStorage,
+  FoodProduct,
+  PersonalizationProfile,
+  ProductCard,
+  ScanRequestBody
+} from "../platform/types.ts";
 
 interface RuntimeContext {
   waitUntil(promise: Promise<unknown>): void;
@@ -40,9 +49,14 @@ interface ProductAnalytics {
   outcome: "known" | "missing" | "estimated" | "pending_verification";
   gtin: string;
   userId: string;
+  source: NonNullable<ScanRequestBody["source"]>;
+  vertical: "food" | "cosmetic" | "unknown";
   optiScore?: number;
   optiFit?: number;
 }
+
+const FALLBACK_ARTIFACT_MAX_BYTES = 10 * 1024 * 1024;
+const FALLBACK_ARTIFACT_TTL_SECONDS = 60 * 60 * 24 * 90;
 
 export async function handleApiRequest(request: Request, env: Env, ctx: RuntimeContext): Promise<Response> {
   const url = new URL(request.url);
@@ -66,6 +80,10 @@ export async function handleApiRequest(request: Request, env: Env, ctx: RuntimeC
 
     if (request.method === "POST" && url.pathname === "/v1/auth/apple") {
       return await handleAppleSignIn(request, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/v1/waitlist") {
+      return await handleWaitlistSignup(request, env);
     }
 
     if (request.method === "POST" && url.pathname === "/v1/score") {
@@ -142,6 +160,7 @@ export async function handleIngestionQueue(batch: MessageBatch<unknown>, env: En
       productId: body.productId,
       gtin: body.gtin,
       uploadKeys: body.uploadKeys,
+      artifactStorage: body.artifactStorage ?? "r2",
       updatedAt: new Date().toISOString()
     }));
     message.ack();
@@ -193,6 +212,8 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
         outcome: "known",
         gtin: body.gtin,
         userId: user.id,
+        source: body.source ?? "barcode",
+        vertical: cachedCardVertical(card),
         optiScore: card.scores.optiScore,
         optiFit: card.scores.optiFit
       }));
@@ -217,7 +238,13 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
       scanSource: body.source ?? "barcode",
       resultStatus: "missing_product"
     }));
-    ctx.waitUntil(writeScanAnalytics(env, { outcome: "missing", gtin: body.gtin, userId: user.id }));
+    ctx.waitUntil(writeScanAnalytics(env, {
+      outcome: "missing",
+      gtin: body.gtin,
+      userId: user.id,
+      source: body.source ?? "barcode",
+      vertical: "unknown"
+    }));
     return jsonResponse(intent, { status: 202 });
   }
 
@@ -239,7 +266,13 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
       scanSource: body.source ?? "barcode",
       resultStatus: "pending_verification"
     }));
-    ctx.waitUntil(writeScanAnalytics(env, { outcome: "pending_verification", gtin: body.gtin, userId: user.id }));
+    ctx.waitUntil(writeScanAnalytics(env, {
+      outcome: "pending_verification",
+      gtin: body.gtin,
+      userId: user.id,
+      source: body.source ?? "barcode",
+      vertical: "food"
+    }));
     // Flatten the intent (same shape as the missing-product response) + override status and add a
     // message, so clients handle "still verifying" and "missing" with one code path.
     return jsonResponse({
@@ -275,6 +308,8 @@ async function handleScan(request: Request, env: Env, ctx: RuntimeContext): Prom
     outcome: "known",
     gtin: body.gtin,
     userId: user.id,
+    source: body.source ?? "barcode",
+    vertical: "food",
     optiScore: card.scores.optiScore,
     optiFit: card.scores.optiFit
   }));
@@ -311,7 +346,13 @@ async function tryCosmeticScan(
       scanSource: body.source ?? "barcode",
       resultStatus: "pending_verification"
     }));
-    ctx.waitUntil(writeScanAnalytics(env, { outcome: "estimated", gtin: body.gtin, userId: user.id }));
+    ctx.waitUntil(writeScanAnalytics(env, {
+      outcome: "estimated",
+      gtin: body.gtin,
+      userId: user.id,
+      source: body.source ?? "barcode",
+      vertical: "cosmetic"
+    }));
     return jsonResponse({
       ...intent,
       status: "pending_verification",
@@ -345,6 +386,8 @@ async function tryCosmeticScan(
     outcome: "known",
     gtin: body.gtin,
     userId: user.id,
+    source: body.source ?? "barcode",
+    vertical: "cosmetic",
     optiScore: card.scores.optiScore,
     optiFit: card.scores.optiFit
   }));
@@ -477,22 +520,8 @@ async function handleUpload(request: Request, env: Env, url: URL, ctx: RuntimeCo
     throw new HttpError(400, "upload_body_required", "Upload body is required.");
   }
 
-  const artifactBucket = getArtifactBucket(env);
-  if (!artifactBucket) {
-    throw new HttpError(503, "artifact_storage_not_configured", "Product artifact storage is not enabled yet.");
-  }
-
-  await artifactBucket.put(verified.objectKey, request.body, {
-    httpMetadata: {
-      contentType: request.headers.get("content-type") ?? "application/octet-stream"
-    },
-    customMetadata: {
-      contributionId: verified.contributionId,
-      userId: verified.userId,
-      kind: verified.kind
-    }
-  });
-  const receipt = await markUploadReceived(env, verified.contributionId, verified.objectKey);
+  const artifactStorage = await storeContributionArtifact(request.body, request.headers, env, verified);
+  const receipt = await markUploadReceived(env, verified.contributionId, verified.objectKey, artifactStorage);
   if (receipt.queueMessage) {
     ctx.waitUntil(env.INGESTION_QUEUE.send(receipt.queueMessage));
   }
@@ -502,15 +531,110 @@ async function handleUpload(request: Request, env: Env, url: URL, ctx: RuntimeCo
     objectKey: verified.objectKey,
     contributionId: verified.contributionId,
     status: receipt.status,
+    artifactStorage,
     readyForReview: receipt.readyForReview,
     uploadsReceived: receipt.uploads.filter((upload) => upload.status === "uploaded").length,
     totalUploads: receipt.uploads.length
   });
 }
 
+async function storeContributionArtifact(
+  body: ReadableStream<Uint8Array>,
+  headers: Headers,
+  env: Env,
+  verified: VerifiedUploadToken
+): Promise<ContributionArtifactStorage> {
+  const contentType = headers.get("content-type") ?? "application/octet-stream";
+  const artifactBucket = getArtifactBucket(env);
+
+  if (artifactBucket) {
+    await artifactBucket.put(verified.objectKey, body, {
+      httpMetadata: {
+        contentType
+      },
+      customMetadata: {
+        contributionId: verified.contributionId,
+        userId: verified.userId,
+        kind: verified.kind
+      }
+    });
+    return "r2";
+  }
+
+  const fallbackStore = getFallbackArtifactStore(env);
+  if (!fallbackStore) {
+    throw new HttpError(503, "artifact_storage_not_configured", "Product artifact storage is not enabled yet.");
+  }
+
+  const declaredLength = Number.parseInt(headers.get("content-length") ?? "", 10);
+  if (Number.isFinite(declaredLength) && declaredLength > FALLBACK_ARTIFACT_MAX_BYTES) {
+    throw new HttpError(413, "upload_too_large", "Upload is too large.");
+  }
+
+  const artifact = await readUploadBodyWithLimit(body, FALLBACK_ARTIFACT_MAX_BYTES);
+  await fallbackStore.put(fallbackArtifactKey(verified.objectKey), artifact, {
+    expirationTtl: FALLBACK_ARTIFACT_TTL_SECONDS,
+    metadata: {
+      contentType,
+      contributionId: verified.contributionId,
+      userId: verified.userId,
+      kind: verified.kind,
+      objectKey: verified.objectKey,
+      artifactStorage: "kv_fallback"
+    }
+  });
+  return "kv_fallback";
+}
+
 function getArtifactBucket(env: Env): R2Bucket | null {
   const maybeEnv = env as unknown as { PRODUCT_ARTIFACTS?: R2Bucket };
   return maybeEnv.PRODUCT_ARTIFACTS ?? null;
+}
+
+function getFallbackArtifactStore(env: Env): KVNamespace | null {
+  const maybeEnv = env as unknown as { APP_CONFIG?: KVNamespace };
+  return maybeEnv.APP_CONFIG ?? null;
+}
+
+async function readUploadBodyWithLimit(
+  body: ReadableStream<Uint8Array>,
+  maxBytes: number
+): Promise<ArrayBuffer> {
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (!value) {
+        continue;
+      }
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        throw new HttpError(413, "upload_too_large", "Upload is too large.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const artifact = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    artifact.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return artifact.buffer.slice(artifact.byteOffset, artifact.byteOffset + artifact.byteLength);
+}
+
+function fallbackArtifactKey(objectKey: string): string {
+  return `artifact:${objectKey}`;
 }
 
 async function handleAsk(request: Request, env: Env): Promise<Response> {
@@ -548,6 +672,19 @@ function handleMethodology(): Response {
 
 async function handleAdmin(request: Request, env: Env, url: URL): Promise<Response> {
   const admin = await requireAdminAccess(request, env);
+
+  if (request.method === "GET" && url.pathname === "/v1/admin/waitlist") {
+    const signups = await listWaitlistSignups(env, {
+      limit: readIntegerSearchParam(url, "limit", 500, 1, 5000),
+      status: parseWaitlistStatus(url.searchParams.get("status"))
+    });
+
+    if (url.searchParams.get("format") === "csv") {
+      return csvResponse(waitlistCsv(signups), "optiyou-waitlist.csv", url);
+    }
+
+    return jsonResponse({ signups, generatedAt: new Date().toISOString() });
+  }
 
   if (request.method === "GET" && url.pathname === "/v1/admin/review-queue") {
     return jsonResponse({ queue: await listContributionReviewQueue(env) });
@@ -594,6 +731,24 @@ async function handleAdmin(request: Request, env: Env, url: URL): Promise<Respon
   return errorResponse(404, "admin_route_not_found", "Admin route not found.");
 }
 
+async function handleWaitlistSignup(request: Request, env: Env): Promise<Response> {
+  const body = parseWaitlistSignupBody(await readJsonBody(request));
+  const result = await createWaitlistSignup(env, {
+    ...body,
+    cfCountry: readRequestCountry(request)
+  });
+
+  return jsonResponse({
+    ok: true,
+    alreadyJoined: result.alreadyJoined,
+    signup: {
+      id: result.signup.id,
+      email: result.signup.email,
+      createdAt: result.signup.createdAt
+    }
+  }, { status: result.alreadyJoined ? 200 : 201 });
+}
+
 function parseScanRequest(value: unknown): ScanRequestBody {
   if (!value || typeof value !== "object") {
     throw new HttpError(400, "invalid_scan_body", "Scan request must be a JSON object.");
@@ -618,6 +773,114 @@ function parseScanRequest(value: unknown): ScanRequestBody {
       : undefined,
     source: isScanSource(source) ? source : "barcode"
   };
+}
+
+function parseWaitlistSignupBody(value: unknown): {
+  email: string;
+  source: string;
+  referrer?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+} {
+  if (!value || typeof value !== "object") {
+    throw new HttpError(400, "invalid_waitlist_body", "Enter an email.");
+  }
+
+  return {
+    email: normalizeEmail(Reflect.get(value, "email")),
+    source: normalizeSource(Reflect.get(value, "source")),
+    referrer: optionalText(Reflect.get(value, "referrer"), 512),
+    utmSource: optionalText(Reflect.get(value, "utmSource"), 120),
+    utmMedium: optionalText(Reflect.get(value, "utmMedium"), 120),
+    utmCampaign: optionalText(Reflect.get(value, "utmCampaign"), 120)
+  };
+}
+
+function normalizeEmail(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new HttpError(400, "invalid_email", "Enter a valid email.");
+  }
+
+  const email = value.trim().toLowerCase();
+  if (email.length < 3 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new HttpError(400, "invalid_email", "Enter a valid email.");
+  }
+
+  return email;
+}
+
+function normalizeSource(value: unknown): string {
+  const source = optionalText(value, 64) ?? "landing_page";
+  return /^[a-zA-Z0-9_.:-]+$/.test(source) ? source : "landing_page";
+}
+
+function optionalText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const text = value.trim();
+  return text ? text.slice(0, maxLength) : undefined;
+}
+
+function readRequestCountry(request: Request): string | undefined {
+  const cf = Reflect.get(request, "cf");
+  if (!cf || typeof cf !== "object") {
+    return undefined;
+  }
+
+  const country = Reflect.get(cf, "country");
+  return typeof country === "string" && /^[A-Z]{2}$/.test(country) ? country : undefined;
+}
+
+function parseWaitlistStatus(value: string | null): "active" | "archived" | undefined {
+  return value === "active" || value === "archived" ? value : undefined;
+}
+
+function readIntegerSearchParam(url: URL, name: string, fallback: number, min: number, max: number): number {
+  const value = url.searchParams.get(name);
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? Math.min(Math.max(parsed, min), max) : fallback;
+}
+
+function waitlistCsv(signups: WaitlistSignup[]): string {
+  const header = ["email", "source", "status", "created_at", "last_seen_at", "utm_source", "utm_medium", "utm_campaign", "cf_country", "referrer"];
+  const rows = signups.map((signup) => [
+    signup.email,
+    signup.source,
+    signup.status,
+    signup.createdAt,
+    signup.lastSeenAt,
+    signup.utmSource,
+    signup.utmMedium,
+    signup.utmCampaign,
+    signup.cfCountry,
+    signup.referrer
+  ]);
+
+  return [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n") + "\n";
+}
+
+function csvCell(value: string | undefined): string {
+  return `"${(value ?? "").replace(/"/g, "\"\"")}"`;
+}
+
+function csvResponse(csv: string, filename: string, url: URL): Response {
+  return withResponseHeaders(
+    new Response(csv, {
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Type": "text/csv; charset=utf-8"
+      }
+    }),
+    url
+  );
 }
 
 function parseContributionBody(value: unknown): { gtin: string; profileId?: string } {
@@ -717,10 +980,15 @@ async function writeScanAnalytics(env: Env, event: ProductAnalytics): Promise<vo
   }
 
   analytics.writeDataPoint({
-    blobs: [event.outcome, event.gtin],
+    blobs: [event.outcome, event.gtin, event.source, event.vertical],
     doubles: [event.optiScore ?? -1, event.optiFit ?? -1],
     indexes: [event.userId]
   });
+}
+
+function cachedCardVertical(card: ProductCard): ProductAnalytics["vertical"] {
+  const vertical = Reflect.get(card, "vertical");
+  return vertical === "cosmetic" ? "cosmetic" : "food";
 }
 
 function getScanAnalytics(env: Env): AnalyticsEngineDataset | null {
@@ -770,7 +1038,15 @@ function isScanSource(value: unknown): value is NonNullable<ScanRequestBody["sou
     value === "ingredients_photo";
 }
 
-function isIngestionQueueMessage(value: unknown): value is { contributionId: string; productId: string; gtin: string; uploadKeys: Record<string, string> } {
+function isIngestionQueueMessage(
+  value: unknown
+): value is {
+  contributionId: string;
+  productId: string;
+  gtin: string;
+  uploadKeys: Record<string, string>;
+  artifactStorage?: ContributionArtifactStorage;
+} {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -778,7 +1054,21 @@ function isIngestionQueueMessage(value: unknown): value is { contributionId: str
   return Reflect.get(value, "type") === "ingest_missing_product" &&
     typeof Reflect.get(value, "contributionId") === "string" &&
     typeof Reflect.get(value, "productId") === "string" &&
-    typeof Reflect.get(value, "gtin") === "string";
+    typeof Reflect.get(value, "gtin") === "string" &&
+    isUploadKeyRecord(Reflect.get(value, "uploadKeys")) &&
+    isContributionArtifactStorage(Reflect.get(value, "artifactStorage"));
+}
+
+function isContributionArtifactStorage(value: unknown): value is ContributionArtifactStorage | undefined {
+  return value === undefined || value === "r2" || value === "kv_fallback";
+}
+
+function isUploadKeyRecord(value: unknown): value is Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.values(value).every((entry) => typeof entry === "string");
 }
 
 function base64UrlEncode(value: ArrayBuffer): string {

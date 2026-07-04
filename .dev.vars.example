@@ -11,6 +11,10 @@ AUTH_JWT_AUDIENCE=optiyou-ios
 AUTH_SESSION_TTL_SECONDS=3600
 AUTH_APPLE_NONCE_TTL_SECONDS=600
 APPLE_CLIENT_ID=co.optiyou.app
+# Optional: enables live scan metrics in the admin dashboard.
+ANALYTICS_ACCOUNT_ID=75c2ecd9fee15d06f93013c411f31aaa
+SCAN_ANALYTICS_DATASET=optiyou_scan_analytics
+ANALYTICS_API_TOKEN=
 # Optional local-only bypass when ENVIRONMENT is not production.
 DEV_AUTH_TOKEN=replace-with-local-dev-token
 DEV_AUTH_USER_ID=seed-user

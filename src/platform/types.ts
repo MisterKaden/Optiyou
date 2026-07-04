@@ -221,6 +221,8 @@ export interface ContributionUploadIntent {
   expiresAt: string;
 }
 
+export type ContributionArtifactStorage = "r2" | "kv_fallback";
+
 export interface IngestionQueueMessage {
   type: "ingest_missing_product";
   productId: string;
@@ -228,6 +230,7 @@ export interface IngestionQueueMessage {
   gtin: string;
   market: Market;
   uploadKeys: Record<UploadKind, string>;
+  artifactStorage?: ContributionArtifactStorage;
 }
 
 export interface ScanRequestBody {

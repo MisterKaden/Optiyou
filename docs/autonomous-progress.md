@@ -106,8 +106,8 @@ analytics. **Open:** repeat scans of an unverified product create duplicate cont
 - **Wire the graph into scoring** (apply `applyEvidence` directives over the v0 keyword seeds) — a
   design choice (override vs stack; avoid double-counting) best made attended.
 - **Phase 6 photo pipeline** (BiRefNet → R2) — needs Workers AI / R2 runtime.
-- **Phase 7 premium/offline**, **Analytics Engine binding** (left out of `wrangler.jsonc` so deploys
-  don't fail if the feature isn't enabled), **cosmetic CosIng/regulatory enrichment**.
+- **Phase 7 premium/offline**, Analytics Engine production SQL token for live admin reads, **cosmetic
+  CosIng/regulatory enrichment**.
 
 ## 🚀 LAUNCHED (live, proven end-to-end) — 2026-06-07
 

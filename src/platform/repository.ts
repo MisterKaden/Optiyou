@@ -1,5 +1,6 @@
 import type {
   Allergen,
+  ContributionArtifactStorage,
   ContributionIntent,
   FoodProduct,
   Ingredient,
@@ -104,6 +105,21 @@ interface ContributionUploadRow {
   uploaded_at: string | null;
 }
 
+interface WaitlistSignupRow {
+  id: string;
+  email: string;
+  source: string;
+  status: "active" | "archived";
+  referrer: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  cf_country: string | null;
+  created_at: string;
+  updated_at: string;
+  last_seen_at: string;
+}
+
 export interface ContributionUploadReceipt {
   contributionId: string;
   productId: string;
@@ -134,6 +150,31 @@ export interface ContributionReviewQueueItem {
     status: "awaiting_upload" | "uploaded";
     uploadedAt?: string;
   }>;
+}
+
+export interface WaitlistSignup {
+  id: string;
+  email: string;
+  source: string;
+  status: "active" | "archived";
+  referrer?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  cfCountry?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastSeenAt: string;
+}
+
+export interface WaitlistSignupInput {
+  email: string;
+  source: string;
+  referrer?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  cfCountry?: string;
 }
 
 export type ContributionReviewDecision = "needs_review" | "approved" | "rejected";
@@ -291,6 +332,78 @@ export async function ensureUser(env: Env, user: Pick<AuthenticatedUser, "id" | 
   `).bind(user.id, user.email ?? null).run();
 }
 
+export async function createWaitlistSignup(
+  env: Env,
+  input: WaitlistSignupInput
+): Promise<{ signup: WaitlistSignup; alreadyJoined: boolean }> {
+  const existing = await env.DB.prepare(`
+    SELECT id
+    FROM waitlist_signups
+    WHERE email = ?
+    LIMIT 1
+  `).bind(input.email).first<{ id: string }>();
+
+  await env.DB.prepare(`
+    INSERT INTO waitlist_signups (
+      id, email, source, status, referrer, utm_source, utm_medium, utm_campaign, cf_country, last_seen_at
+    ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    ON CONFLICT(email) DO UPDATE SET
+      source = excluded.source,
+      status = 'active',
+      referrer = COALESCE(excluded.referrer, waitlist_signups.referrer),
+      utm_source = COALESCE(excluded.utm_source, waitlist_signups.utm_source),
+      utm_medium = COALESCE(excluded.utm_medium, waitlist_signups.utm_medium),
+      utm_campaign = COALESCE(excluded.utm_campaign, waitlist_signups.utm_campaign),
+      cf_country = COALESCE(excluded.cf_country, waitlist_signups.cf_country),
+      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+      last_seen_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  `).bind(
+    `waitlist_${crypto.randomUUID()}`,
+    input.email,
+    input.source,
+    input.referrer ?? null,
+    input.utmSource ?? null,
+    input.utmMedium ?? null,
+    input.utmCampaign ?? null,
+    input.cfCountry ?? null
+  ).run();
+
+  const row = await env.DB.prepare(`
+    SELECT id, email, source, status, referrer, utm_source, utm_medium, utm_campaign, cf_country,
+           created_at, updated_at, last_seen_at
+    FROM waitlist_signups
+    WHERE email = ?
+    LIMIT 1
+  `).bind(input.email).first<WaitlistSignupRow>();
+
+  if (!row) {
+    throw new Error("Waitlist signup was not persisted.");
+  }
+
+  return {
+    signup: waitlistSignupFromRow(row),
+    alreadyJoined: Boolean(existing)
+  };
+}
+
+export async function listWaitlistSignups(
+  env: Env,
+  options: { limit?: number; status?: "active" | "archived" } = {}
+): Promise<WaitlistSignup[]> {
+  const limit = Math.min(Math.max(options.limit ?? 200, 1), 5000);
+  const status = options.status ?? null;
+  const rows = await env.DB.prepare(`
+    SELECT id, email, source, status, referrer, utm_source, utm_medium, utm_campaign, cf_country,
+           created_at, updated_at, last_seen_at
+    FROM waitlist_signups
+    WHERE (? IS NULL OR status = ?)
+    ORDER BY created_at DESC
+    LIMIT ${limit}
+  `).bind(status, status).all<WaitlistSignupRow>();
+
+  return rows.results.map(waitlistSignupFromRow);
+}
+
 export async function listAlternatives(env: Env, product: FoodProduct): Promise<FoodProduct[]> {
   const rows = await env.DB.prepare(`
     SELECT
@@ -373,7 +486,8 @@ export async function createContributionShell(
 export async function markUploadReceived(
   env: Env,
   contributionId: string,
-  objectKey: string
+  objectKey: string,
+  artifactStorage: ContributionArtifactStorage = "r2"
 ): Promise<ContributionUploadReceipt> {
   await env.DB.prepare(`
     UPDATE contribution_uploads
@@ -417,7 +531,8 @@ export async function markUploadReceived(
       contributionId,
       gtin: contribution.gtin,
       market: "US_CA",
-      uploadKeys: uploadKeysFromRows(uploads)
+      uploadKeys: uploadKeysFromRows(uploads),
+      ...(artifactStorage === "r2" ? {} : { artifactStorage })
     } : undefined
   };
 }
@@ -545,19 +660,48 @@ export interface AdminMetrics {
   products: { total: number; byVertical: Record<string, number>; byVerification: Record<string, number> };
   scores: { foodByBand: Record<string, number>; cosmeticByBand: Record<string, number> };
   contributions: { byStatus: Record<string, number> };
-  scans: { byResult: Record<string, number> };
+  scans: {
+    byResult: Record<string, number>;
+    analyticsEngine: AdminScanAnalyticsMetrics;
+  };
 }
 
-// Optimization-metrics snapshot for the admin dashboard, derived from D1 (no Analytics Engine
-// dependency). Coverage, data-quality, score health, contribution funnel, scan outcomes.
+export interface AdminScanAnalyticsMetrics {
+  status: "ready" | "not_configured" | "unavailable";
+  dataset: string;
+  last24Hours: number;
+  last7Days: number;
+  avgOptiScore: number | null;
+  avgOptiFit: number | null;
+  byOutcome24h: Record<string, number>;
+  bySource24h: Record<string, number>;
+  byVertical24h: Record<string, number>;
+  trend7d: Array<{ t: number; scans: number }>;
+  topGtins24h: Array<{ gtin: string; scans: number }>;
+}
+
+const DEFAULT_SCAN_ANALYTICS_DATASET = "optiyou_scan_analytics";
+const ANALYTICS_SQL_API_BASE = "https://api.cloudflare.com/client/v4/accounts";
+
+// Optimization-metrics snapshot for the admin dashboard. D1 provides the durable operational
+// baseline; Analytics Engine adds live scan telemetry when the read token is configured.
 export async function getAdminMetrics(env: Env): Promise<AdminMetrics> {
-  const [byVertical, byVerification, foodByBand, cosmeticByBand, contributionsByStatus, scansByResult] = await Promise.all([
+  const [
+    byVertical,
+    byVerification,
+    foodByBand,
+    cosmeticByBand,
+    contributionsByStatus,
+    scansByResult,
+    scanAnalytics
+  ] = await Promise.all([
     groupCount(env, "SELECT vertical AS k, COUNT(*) AS c FROM products GROUP BY vertical"),
     groupCount(env, "SELECT verification_status AS k, COUNT(*) AS c FROM products GROUP BY verification_status"),
     groupCount(env, "SELECT grade_band AS k, COUNT(*) AS c FROM scores WHERE grade_band IS NOT NULL GROUP BY grade_band"),
     groupCount(env, "SELECT grade_band AS k, COUNT(*) AS c FROM cosmetic_scores GROUP BY grade_band"),
     groupCount(env, "SELECT status AS k, COUNT(*) AS c FROM contributions GROUP BY status"),
-    groupCount(env, "SELECT result_status AS k, COUNT(*) AS c FROM scan_history GROUP BY result_status")
+    groupCount(env, "SELECT result_status AS k, COUNT(*) AS c FROM scan_history GROUP BY result_status"),
+    getAdminScanAnalyticsMetrics(env)
   ]);
 
   const total = Object.values(byVertical).reduce((sum, count) => sum + count, 0);
@@ -565,8 +709,188 @@ export async function getAdminMetrics(env: Env): Promise<AdminMetrics> {
     products: { total, byVertical, byVerification },
     scores: { foodByBand, cosmeticByBand },
     contributions: { byStatus: contributionsByStatus },
-    scans: { byResult: scansByResult }
+    scans: { byResult: scansByResult, analyticsEngine: scanAnalytics }
   };
+}
+
+async function getAdminScanAnalyticsMetrics(env: Env): Promise<AdminScanAnalyticsMetrics> {
+  const dataset = readEnvString(env, "SCAN_ANALYTICS_DATASET") ?? DEFAULT_SCAN_ANALYTICS_DATASET;
+  const empty = emptyScanAnalyticsMetrics(dataset);
+  const accountId = readEnvString(env, "ANALYTICS_ACCOUNT_ID");
+  const token = readEnvString(env, "ANALYTICS_API_TOKEN");
+  const table = analyticsDatasetTable(dataset);
+
+  if (!accountId || !token || !table) {
+    return empty;
+  }
+
+  try {
+    const [totals, byOutcome, bySource, byVertical, averages, trend, topGtins] = await Promise.all([
+      queryAnalyticsEngine(env, accountId, token, `
+        SELECT
+          SUM(_sample_interval) AS last_7_days,
+          SUM(if(timestamp >= now() - INTERVAL 1 DAY, _sample_interval, 0)) AS last_24_hours
+        FROM ${table}
+        WHERE timestamp >= now() - INTERVAL 7 DAY
+      `),
+      queryAnalyticsEngine(env, accountId, token, `
+        SELECT blob1 AS outcome, SUM(_sample_interval) AS scans
+        FROM ${table}
+        WHERE timestamp >= now() - INTERVAL 1 DAY
+        GROUP BY outcome
+        ORDER BY scans DESC
+      `),
+      queryAnalyticsEngine(env, accountId, token, `
+        SELECT blob3 AS source, SUM(_sample_interval) AS scans
+        FROM ${table}
+        WHERE timestamp >= now() - INTERVAL 1 DAY AND blob3 != ''
+        GROUP BY source
+        ORDER BY scans DESC
+      `),
+      queryAnalyticsEngine(env, accountId, token, `
+        SELECT blob4 AS vertical, SUM(_sample_interval) AS scans
+        FROM ${table}
+        WHERE timestamp >= now() - INTERVAL 1 DAY AND blob4 != ''
+        GROUP BY vertical
+        ORDER BY scans DESC
+      `),
+      queryAnalyticsEngine(env, accountId, token, `
+        SELECT
+          SUM(_sample_interval * double1) / SUM(_sample_interval) AS avg_opti_score,
+          SUM(_sample_interval * double2) / SUM(_sample_interval) AS avg_opti_fit
+        FROM ${table}
+        WHERE timestamp >= now() - INTERVAL 1 DAY AND double1 >= 0 AND double2 >= 0
+      `),
+      queryAnalyticsEngine(env, accountId, token, `
+        SELECT intDiv(toUInt32(timestamp), 86400) * 86400 AS t, SUM(_sample_interval) AS scans
+        FROM ${table}
+        WHERE timestamp >= now() - INTERVAL 7 DAY
+        GROUP BY t
+        ORDER BY t ASC
+      `),
+      queryAnalyticsEngine(env, accountId, token, `
+        SELECT blob2 AS gtin, SUM(_sample_interval) AS scans
+        FROM ${table}
+        WHERE timestamp >= now() - INTERVAL 1 DAY AND blob2 != ''
+        GROUP BY gtin
+        ORDER BY scans DESC
+        LIMIT 5
+      `)
+    ]);
+
+    const totalRow = totals[0] ?? {};
+    const averageRow = averages[0] ?? {};
+    return {
+      status: "ready",
+      dataset,
+      last24Hours: numberFrom(totalRow.last_24_hours),
+      last7Days: numberFrom(totalRow.last_7_days),
+      avgOptiScore: nullableRoundedNumber(averageRow.avg_opti_score),
+      avgOptiFit: nullableRoundedNumber(averageRow.avg_opti_fit),
+      byOutcome24h: rowsToGroupCount(byOutcome, "outcome"),
+      bySource24h: rowsToGroupCount(bySource, "source"),
+      byVertical24h: rowsToGroupCount(byVertical, "vertical"),
+      trend7d: trend.map((row) => ({
+        t: numberFrom(row.t),
+        scans: numberFrom(row.scans)
+      })).filter((row) => row.t > 0),
+      topGtins24h: topGtins.map((row) => ({
+        gtin: String(row.gtin ?? "unknown"),
+        scans: numberFrom(row.scans)
+      })).filter((row) => row.gtin !== "unknown")
+    };
+  } catch (error) {
+    console.error(JSON.stringify({
+      level: "error",
+      event: "admin_scan_analytics_query_failed",
+      message: error instanceof Error ? error.message : "Unknown error"
+    }));
+    return { ...empty, status: "unavailable" };
+  }
+}
+
+async function queryAnalyticsEngine(
+  env: Env,
+  accountId: string,
+  token: string,
+  sql: string
+): Promise<Array<Record<string, unknown>>> {
+  const fetcher = getFetcher(env);
+  const response = await fetcher(`${ANALYTICS_SQL_API_BASE}/${encodeURIComponent(accountId)}/analytics_engine/sql`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "text/plain"
+    },
+    body: `${sql.trim()}\nFORMAT JSON`
+  });
+
+  if (!response.ok) {
+    throw new Error(`Analytics Engine SQL returned HTTP ${response.status}`);
+  }
+
+  const payload = await response.json() as { data?: unknown; errors?: unknown };
+  if (Array.isArray(payload.errors) && payload.errors.length > 0) {
+    throw new Error("Analytics Engine SQL returned errors");
+  }
+  if (!Array.isArray(payload.data)) {
+    throw new Error("Analytics Engine SQL response was not tabular JSON");
+  }
+
+  return payload.data.filter((row): row is Record<string, unknown> =>
+    Boolean(row) && typeof row === "object" && !Array.isArray(row));
+}
+
+function emptyScanAnalyticsMetrics(dataset: string): AdminScanAnalyticsMetrics {
+  return {
+    status: "not_configured",
+    dataset,
+    last24Hours: 0,
+    last7Days: 0,
+    avgOptiScore: null,
+    avgOptiFit: null,
+    byOutcome24h: {},
+    bySource24h: {},
+    byVertical24h: {},
+    trend7d: [],
+    topGtins24h: []
+  };
+}
+
+function analyticsDatasetTable(dataset: string): string | null {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(dataset) ? dataset : null;
+}
+
+function readEnvString(env: Env, name: string): string | null {
+  const value = Reflect.get(env, name);
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function getFetcher(env: Env): typeof fetch {
+  const maybeEnv = env as unknown as { fetch?: typeof fetch };
+  return maybeEnv.fetch ?? fetch;
+}
+
+function rowsToGroupCount(rows: Array<Record<string, unknown>>, keyField: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const row of rows) {
+    const key = String(row[keyField] ?? "unknown");
+    if (!key || key === "unknown") {
+      continue;
+    }
+    out[key] = numberFrom(row.scans);
+  }
+  return out;
+}
+
+function numberFrom(value: unknown): number {
+  const numberValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numberValue) ? Math.round(numberValue) : 0;
+}
+
+function nullableRoundedNumber(value: unknown): number | null {
+  const numberValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numberValue) ? Math.round(numberValue * 10) / 10 : null;
 }
 
 export interface EvidenceCardRow {
@@ -653,6 +977,23 @@ async function groupCount(env: Env, sql: string): Promise<Record<string, number>
     }));
     return {};
   }
+}
+
+function waitlistSignupFromRow(row: WaitlistSignupRow): WaitlistSignup {
+  return {
+    id: row.id,
+    email: row.email,
+    source: row.source,
+    status: row.status,
+    referrer: row.referrer ?? undefined,
+    utmSource: row.utm_source ?? undefined,
+    utmMedium: row.utm_medium ?? undefined,
+    utmCampaign: row.utm_campaign ?? undefined,
+    cfCountry: row.cf_country ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastSeenAt: row.last_seen_at
+  };
 }
 
 async function loadProductFromRow(env: Env, row: ProductRow): Promise<FoodProduct> {

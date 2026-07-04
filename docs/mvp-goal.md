@@ -3,7 +3,9 @@
 > The north-star definition of the Optiyou MVP across **three pillars: Food, Cosmetics, and the
 > Optimization layer.** Extends [master-plan.md](master-plan.md) (food spine) and
 > [nutrition-evidence-gatekeeper.md](nutrition-evidence-gatekeeper.md) (ATLAS) to a two-vertical
-> product. Status: **direction draft, pre-implementation.** Last updated 2026-06-06.
+> product. The post-MVP health-data layer (biomarkers, labs, PHI boundary) is specified in
+> [health-layer-blueprint.md](health-layer-blueprint.md). Status: **direction draft,
+> pre-implementation.** Last updated 2026-06-10.
 
 ---
 
@@ -125,7 +127,7 @@ deterministic, versioned, and re-scoreable. ATLAS drafts the evidence both rely 
 - 🚫 **Do NOT ingest EWG Skin Deep scores** (personal/non-commercial only, no machine reuse, actively enforced) — methodology *reference* only. 🚫 Verify ChemSec **SIN List** terms before embedding; prefer official **ECHA/EU EDC/SVHC** lists.
 
 ### Optimization (metrics/analytics)
-- **Cloudflare Analytics Engine** (scan events, outcomes, score distributions) — **needs a binding added** (not in `wrangler.jsonc` yet).
+- **Cloudflare Analytics Engine** (scan events, outcomes, score distributions) — `SCAN_ANALYTICS` is bound; live admin reads need the Analytics SQL token.
 - User personalization data (profiles, goals, household) in D1.
 - Derived business KPIs (see §7).
 
@@ -192,7 +194,7 @@ verifying" + contribute) · full audit log.
 | **Cron Triggers** | ❌ not yet | Add nightly ingestion/refresh schedule |
 | Vectorize `product-evidence` | ⚠️ bound | Confirm index exists; add product/alternatives index |
 | Workers AI + AI Gateway | ✅ bound | Wire extraction + BiRefNet + ATLAS |
-| **Analytics Engine** | ❌ not bound | Add dataset binding for optimization metrics |
+| **Analytics Engine** | ✅ bound | Set `ANALYTICS_API_TOKEN` for live admin scan metrics |
 | Subscriptions / StoreKit | ⚠️ stub | Wire premium entitlement for offline mode |
 | Secrets (`.dev.vars` / prod) | partial | Finalize signing/admin/JWT secrets |
 
@@ -209,7 +211,7 @@ verifying" + contribute) · full audit log.
 - **Phase 2 — Admin visibility gate + admin role** ✅ *(role on Apple Sign-In; confidence gate; pending_verification flow)*
 - **Phase 3 — Cosmetics vertical** ✅ *(`cosmetic-us-ca-v1` multi-axis scorer; `vertical` schema; Open Beauty Facts ingestion). Still TODO: route the scan/lookup API to the cosmetic scorer + cosmetic visibility; CosIng/regulatory enrichment.*
 - **Phase 4 — Ingredient Intelligence graph + ATLAS** ⏳ *(needs Workers AI — graph schema + Evidence Card model are buildable now; live ATLAS runs attended)*
-- **Phase 5 — OptiFit personalization + optimization metrics dashboard** 🟡 *(food + cosmetic OptiFit done; admin `/v1/admin/metrics` snapshot done; dashboard UI + Analytics Engine binding pending)*
+- **Phase 5 — OptiFit personalization + optimization metrics dashboard** 🟡 *(food + cosmetic OptiFit done; admin `/v1/admin/metrics` snapshot + live Analytics Engine views wired; production SQL token still required)*
 - **Phase 6 — Photo pipeline** ⏳ *(BiRefNet → R2, both verticals; R2 bucket ready)*
 - **Phase 7 — Premium (offline mode) + polish** ⏳ → **MVP launch candidate**
 

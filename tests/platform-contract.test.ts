@@ -334,6 +334,86 @@ test("admin metrics endpoint is role-gated and returns a metrics snapshot", asyn
   assert.equal(denied.status, 403);
 });
 
+test("admin metrics endpoint enriches the snapshot with live Analytics Engine scans", async () => {
+  const db = createFakeD1();
+  const sqlCalls: Array<{ url: string; body: string; authorization: string | null }> = [];
+  const env = {
+    ...authEnv(),
+    ADMIN_USER_IDS: "apple:001.admin",
+    DB: db.database,
+    ANALYTICS_ACCOUNT_ID: "acct-123",
+    ANALYTICS_API_TOKEN: "analytics-read-token",
+    SCAN_ANALYTICS_DATASET: "optiyou_scan_analytics",
+    fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+      const body = String(init?.body ?? "");
+      const headers = new Headers(init?.headers);
+      sqlCalls.push({ url: String(input), body, authorization: headers.get("authorization") });
+
+      if (body.includes("last_7_days")) {
+        return analyticsSqlResponse([{ last_7_days: 17, last_24_hours: 5 }]);
+      }
+      if (body.includes("blob1 AS outcome")) {
+        return analyticsSqlResponse([{ outcome: "known", scans: 4 }, { outcome: "missing", scans: 1 }]);
+      }
+      if (body.includes("blob3 AS source")) {
+        return analyticsSqlResponse([{ source: "barcode", scans: 5 }]);
+      }
+      if (body.includes("blob4 AS vertical")) {
+        return analyticsSqlResponse([{ vertical: "food", scans: 3 }, { vertical: "cosmetic", scans: 2 }]);
+      }
+      if (body.includes("avg_opti_score")) {
+        return analyticsSqlResponse([{ avg_opti_score: 82.44, avg_opti_fit: 76.15 }]);
+      }
+      if (body.includes("GROUP BY t")) {
+        return analyticsSqlResponse([{ t: 1782604800, scans: 7 }]);
+      }
+      if (body.includes("blob2 AS gtin")) {
+        return analyticsSqlResponse([{ gtin: "006178200002", scans: 3 }]);
+      }
+
+      return analyticsSqlResponse([]);
+    }
+  } as unknown as Env;
+  const adminToken = await signJwt({ sub: "apple:001.admin", iss: "optiyou-test", aud: "optiyou-ios", exp: Math.floor(Date.now() / 1000) + 600, token_use: "optiyou_access" }, "test-secret");
+
+  const ok = await handleApiRequest(new Request("https://optiyou.test/v1/admin/metrics", {
+    headers: { authorization: `Bearer ${adminToken}` }
+  }), env, noopCtx());
+
+  assert.equal(ok.status, 200);
+  const body = await ok.json() as {
+    metrics: {
+      scans: {
+        analyticsEngine: {
+          status: string;
+          last24Hours: number;
+          last7Days: number;
+          avgOptiScore: number | null;
+          avgOptiFit: number | null;
+          byOutcome24h: Record<string, number>;
+          bySource24h: Record<string, number>;
+          byVertical24h: Record<string, number>;
+          topGtins24h: Array<{ gtin: string; scans: number }>;
+        };
+      };
+    };
+  };
+  const live = body.metrics.scans.analyticsEngine;
+  assert.equal(live.status, "ready");
+  assert.equal(live.last24Hours, 5);
+  assert.equal(live.last7Days, 17);
+  assert.equal(live.avgOptiScore, 82.4);
+  assert.equal(live.avgOptiFit, 76.2);
+  assert.deepEqual(live.byOutcome24h, { known: 4, missing: 1 });
+  assert.deepEqual(live.bySource24h, { barcode: 5 });
+  assert.deepEqual(live.byVertical24h, { food: 3, cosmetic: 2 });
+  assert.deepEqual(live.topGtins24h, [{ gtin: "006178200002", scans: 3 }]);
+  assert.equal(sqlCalls.length, 7);
+  assert.ok(sqlCalls.every((call) => call.url === "https://api.cloudflare.com/client/v4/accounts/acct-123/analytics_engine/sql"));
+  assert.ok(sqlCalls.every((call) => call.authorization === "Bearer analytics-read-token"));
+  assert.ok(sqlCalls.every((call) => call.body.includes("FORMAT JSON")));
+});
+
 test("admin evidence review endpoint is role-gated and returns a card list", async () => {
   const db = createFakeD1();
   const env = { ...authEnv(), ADMIN_USER_IDS: "apple:001.admin", DB: db.database } as unknown as Env;
@@ -348,6 +428,73 @@ test("admin evidence review endpoint is role-gated and returns a card list", asy
 
   const denied = await handleApiRequest(new Request("https://optiyou.test/v1/admin/evidence"), env, noopCtx());
   assert.equal(denied.status, 403);
+});
+
+test("waitlist signup endpoint stores normalized email and handles repeats", async () => {
+  const db = createFakeD1();
+  const env = { DB: db.database } as unknown as Env;
+
+  const first = await handleApiRequest(new Request("https://optiyou.test/v1/waitlist", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      email: " Founder+Test@Example.COM ",
+      source: "landing_page",
+      referrer: "https://example.com/",
+      utmSource: "launch"
+    })
+  }), env, noopCtx());
+  assert.equal(first.status, 201);
+  const firstBody = await first.json() as { alreadyJoined: boolean; signup: { email: string } };
+  assert.equal(firstBody.alreadyJoined, false);
+  assert.equal(firstBody.signup.email, "founder+test@example.com");
+
+  const second = await handleApiRequest(new Request("https://optiyou.test/v1/waitlist", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "founder+test@example.com", source: "landing_page" })
+  }), env, noopCtx());
+  assert.equal(second.status, 200);
+  const secondBody = await second.json() as { alreadyJoined: boolean };
+  assert.equal(secondBody.alreadyJoined, true);
+
+  assert.ok(db.runs.some((run) => run.sql.includes("INSERT INTO waitlist_signups") && run.values[1] === "founder+test@example.com"));
+});
+
+test("admin waitlist endpoint is gated and can export CSV", async () => {
+  const db = createFakeD1({
+    waitlistSignups: [{
+      id: "waitlist-one",
+      email: "founder@example.com",
+      source: "landing_page",
+      status: "active",
+      createdAt: "2026-06-29T10:00:00.000Z",
+      updatedAt: "2026-06-29T10:00:00.000Z",
+      lastSeenAt: "2026-06-29T10:00:00.000Z"
+    }]
+  });
+  const env = {
+    ...authEnv(),
+    ADMIN_API_TOKEN: "admin-secret",
+    DB: db.database
+  } as unknown as Env;
+
+  const denied = await handleApiRequest(new Request("https://optiyou.test/v1/admin/waitlist"), env, noopCtx());
+  assert.equal(denied.status, 403);
+
+  const list = await handleApiRequest(new Request("https://optiyou.test/v1/admin/waitlist", {
+    headers: { "x-optiyou-admin-token": "admin-secret" }
+  }), env, noopCtx());
+  assert.equal(list.status, 200);
+  const listBody = await list.json() as { signups: Array<{ email: string }> };
+  assert.equal(listBody.signups[0].email, "founder@example.com");
+
+  const csv = await handleApiRequest(new Request("https://optiyou.test/v1/admin/waitlist?format=csv", {
+    headers: { "x-optiyou-admin-token": "admin-secret" }
+  }), env, noopCtx());
+  assert.equal(csv.status, 200);
+  assert.match(csv.headers.get("content-type") ?? "", /text\/csv/);
+  assert.match(await csv.text(), /"founder@example.com"/);
 });
 
 test("scan cache gate serves an admin_only card to an admin and labels its visibility", async () => {
@@ -381,6 +528,7 @@ test("scan cache gate serves an admin_only card to an admin and labels its visib
 test("cached scan responses still write scan history", async () => {
   const card = productCard();
   const db = createFakeD1();
+  const analyticsPoints: unknown[] = [];
   const waitUntilPromises: Promise<unknown>[] = [];
   const token = await signJwt({
     sub: "user-123",
@@ -396,7 +544,7 @@ test("cached scan responses still write scan history", async () => {
       put: async () => undefined
     },
     DB: db.database,
-    SCAN_ANALYTICS: { writeDataPoint: () => undefined },
+    SCAN_ANALYTICS: { writeDataPoint: (point: unknown) => analyticsPoints.push(point) },
     INGESTION_QUEUE: { send: async () => undefined }
   } as unknown as Env;
   const response = await handleApiRequest(new Request("https://optiyou.test/v1/scan", {
@@ -418,6 +566,11 @@ test("cached scan responses still write scan history", async () => {
 
   assert.ok(db.runs.some((run) => run.sql.includes("INSERT INTO scan_history")));
   assert.ok(db.runs.some((run) => run.values.includes(card.product.id) && run.values.includes(cereal.gtin)));
+  assert.deepEqual(analyticsPoints, [{
+    blobs: ["known", cereal.gtin, "barcode", "food"],
+    doubles: [card.scores.optiScore, card.scores.optiFit],
+    indexes: ["user-123"]
+  }]);
 });
 
 test("missing profile ids fail instead of silently using an empty profile", async () => {
@@ -501,13 +654,95 @@ test("final signed upload marks a contribution ready for review and queues inges
   });
 
   assert.equal(response.status, 200);
-  const body = await response.json() as { status?: string; readyForReview?: boolean };
+  const body = await response.json() as { status?: string; artifactStorage?: string; readyForReview?: boolean };
   await Promise.all(waitUntilPromises);
 
   assert.equal(body.status, "needs_review");
   assert.equal(body.readyForReview, true);
+  assert.equal(body.artifactStorage, "r2");
   assert.deepEqual(queuedMessages, [intent.queueMessage]);
   assert.deepEqual(storedObjects, [{ key: upload.objectKey, contentType: "image/jpeg" }]);
+  assert.ok(db.runs.some((run) => run.sql.includes("UPDATE contributions") && run.values.includes("needs_review")));
+});
+
+test("signed uploads fall back to KV artifacts when R2 is not bound", async () => {
+  const intent = await buildContributionIntent({
+    gtin: "000000000999",
+    userId: "user-123",
+    profileId: "profile-low-sugar",
+    baseUrl: "https://optiyou.test",
+    now: new Date(),
+    signingSecret: "test-secret"
+  });
+  const db = createFakeD1({
+    contributionProduct: {
+      contributionId: intent.contribution.id,
+      productId: intent.product.id,
+      gtin: intent.product.gtin,
+      status: "awaiting_uploads"
+    },
+    contributionUploads: intent.uploads.map((candidate) => ({
+      kind: candidate.kind,
+      r2Key: candidate.objectKey,
+      status: "uploaded"
+    }))
+  });
+  const queuedMessages: unknown[] = [];
+  const fallbackArtifacts: Array<{
+    key: string;
+    bytes: number;
+    metadata?: Record<string, unknown>;
+    expirationTtl?: number;
+  }> = [];
+  const waitUntilPromises: Promise<unknown>[] = [];
+  const upload = intent.uploads.find((candidate) => candidate.kind === "ingredients_label") ?? intent.uploads[0];
+  const env = {
+    ...authEnv(),
+    UPLOAD_SIGNING_SECRET: "test-secret",
+    DB: db.database,
+    APP_CONFIG: {
+      async put(key: string, value: ArrayBuffer, options?: { metadata?: Record<string, unknown>; expirationTtl?: number }) {
+        fallbackArtifacts.push({ key, bytes: value.byteLength, metadata: options?.metadata, expirationTtl: options?.expirationTtl });
+      }
+    },
+    INGESTION_QUEUE: {
+      send: async (message: unknown) => {
+        queuedMessages.push(message);
+      }
+    }
+  } as unknown as Env;
+
+  const response = await handleApiRequest(new Request(upload.url, {
+    method: "PUT",
+    headers: { "content-type": "image/jpeg" },
+    body: new Blob(["label-photo"])
+  }), env, {
+    waitUntil(promise: Promise<unknown>) {
+      waitUntilPromises.push(promise);
+    }
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.json() as { status?: string; artifactStorage?: string; readyForReview?: boolean };
+  await Promise.all(waitUntilPromises);
+
+  assert.equal(body.status, "needs_review");
+  assert.equal(body.readyForReview, true);
+  assert.equal(body.artifactStorage, "kv_fallback");
+  assert.deepEqual(queuedMessages, [{ ...intent.queueMessage, artifactStorage: "kv_fallback" }]);
+  assert.deepEqual(fallbackArtifacts, [{
+    key: `artifact:${upload.objectKey}`,
+    bytes: "label-photo".length,
+    metadata: {
+      contentType: "image/jpeg",
+      contributionId: intent.contribution.id,
+      userId: "user-123",
+      kind: upload.kind,
+      objectKey: upload.objectKey,
+      artifactStorage: "kv_fallback"
+    },
+    expirationTtl: 7776000
+  }]);
   assert.ok(db.runs.some((run) => run.sql.includes("UPDATE contributions") && run.values.includes("needs_review")));
 });
 
@@ -740,6 +975,12 @@ function noopCtx() {
   };
 }
 
+function analyticsSqlResponse(data: Array<Record<string, unknown>>): Response {
+  return new Response(JSON.stringify({ data }), {
+    headers: { "content-type": "application/json" }
+  });
+}
+
 interface FakeRun {
   sql: string;
   values: unknown[];
@@ -768,9 +1009,41 @@ function createFakeD1(options: {
     createdAt: string;
     updatedAt: string;
   }>;
+  waitlistSignups?: Array<{
+    id: string;
+    email: string;
+    source: string;
+    status: "active" | "archived";
+    referrer?: string;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    cfCountry?: string;
+    createdAt: string;
+    updatedAt: string;
+    lastSeenAt: string;
+  }>;
   contributionStatusTransitionChanges?: number;
 } = {}) {
   const runs: FakeRun[] = [];
+  const waitlistRows = new Map<string, Record<string, unknown>>();
+  const toWaitlistRow = (signup: NonNullable<typeof options.waitlistSignups>[number]) => ({
+    id: signup.id,
+    email: signup.email,
+    source: signup.source,
+    status: signup.status,
+    referrer: signup.referrer ?? null,
+    utm_source: signup.utmSource ?? null,
+    utm_medium: signup.utmMedium ?? null,
+    utm_campaign: signup.utmCampaign ?? null,
+    cf_country: signup.cfCountry ?? null,
+    created_at: signup.createdAt,
+    updated_at: signup.updatedAt,
+    last_seen_at: signup.lastSeenAt
+  });
+  for (const signup of options.waitlistSignups ?? []) {
+    waitlistRows.set(signup.email.toLowerCase(), toWaitlistRow(signup));
+  }
 
   const database = {
     prepare(sql: string) {
@@ -807,9 +1080,32 @@ function createFakeD1(options: {
                   }
                 };
               }
+              if (sql.includes("INSERT INTO waitlist_signups")) {
+                const [id, email, source, referrer, utmSource, utmMedium, utmCampaign, cfCountry] = values;
+                const normalizedEmail = String(email).toLowerCase();
+                const existing = waitlistRows.get(normalizedEmail);
+                const now = "2026-06-29T10:00:00.000Z";
+                waitlistRows.set(normalizedEmail, {
+                  id: existing?.id ?? id,
+                  email: normalizedEmail,
+                  source,
+                  status: "active",
+                  referrer: referrer ?? existing?.referrer ?? null,
+                  utm_source: utmSource ?? existing?.utm_source ?? null,
+                  utm_medium: utmMedium ?? existing?.utm_medium ?? null,
+                  utm_campaign: utmCampaign ?? existing?.utm_campaign ?? null,
+                  cf_country: cfCountry ?? existing?.cf_country ?? null,
+                  created_at: existing?.created_at ?? now,
+                  updated_at: now,
+                  last_seen_at: now
+                });
+              }
               return { success: true };
             },
             async first() {
+              if (sql.includes("FROM waitlist_signups") && sql.includes("WHERE email = ?")) {
+                return waitlistRows.get(String(values[0]).toLowerCase()) ?? null;
+              }
               if (sql.includes("FROM contributions c") && options.contributionProduct) {
                 return {
                   contribution_id: options.contributionProduct.contributionId,
@@ -824,6 +1120,11 @@ function createFakeD1(options: {
               return null;
             },
             async all() {
+              if (sql.includes("FROM waitlist_signups")) {
+                return {
+                  results: [...waitlistRows.values()]
+                };
+              }
               if (sql.includes("FROM contributions c") && sql.includes("uploads_received") && options.reviewQueue) {
                 return {
                   results: options.reviewQueue.map((item) => ({

@@ -100,7 +100,7 @@ Worker routes in `wrangler.jsonc` should own web traffic for both hosts.
 - `POST /v1/auth/apple` verifies the Apple identity token, creates or updates the Optiyou user, and returns a short-lived Optiyou bearer access token.
 - `POST /v1/scan` returns an instant product card for known GTINs or a missing-product contribution intent.
 - `GET /v1/methodology` returns the deterministic packaged-food scoring scope and trust rules.
-- `PUT /v1/uploads/:token` stores signed contribution uploads in R2 through the Worker.
+- `PUT /v1/uploads/:token` stores signed contribution uploads in R2 when bound, or in the APP_CONFIG KV fallback when R2 is unavailable.
 - `/v1/admin/*` routes require Cloudflare Access plus `x-optiyou-admin-token`.
 
 ## Product Intelligence Bindings
@@ -109,9 +109,9 @@ The platform bindings are declared in `wrangler.jsonc`:
 
 - D1: `DB` / `optiyou-core`
 - KV: `PRODUCT_CACHE`, `APP_CONFIG`, `METHODOLOGY_CACHE`
-- R2: `PRODUCT_ARTIFACTS` / `optiyou-product-artifacts`
+- R2: optional `PRODUCT_ARTIFACTS` / `optiyou-product-artifacts`
 - Queues: `INGESTION_QUEUE`, `NOTIFICATION_QUEUE`
-- Analytics Engine: `SCAN_ANALYTICS`
+- Analytics Engine: `SCAN_ANALYTICS` / `optiyou_scan_analytics`
 - Workers AI: `AI`
 - Vectorize: `PRODUCT_EVIDENCE_INDEX`
 
@@ -126,6 +126,7 @@ Required Worker secrets:
 - `UPLOAD_SIGNING_SECRET`
 - `ADMIN_API_TOKEN`
 - `AUTH_JWT_SECRET`
+- `ANALYTICS_API_TOKEN` for live admin scan metrics
 
 Production auth vars in `wrangler.jsonc`:
 
@@ -134,6 +135,17 @@ Production auth vars in `wrangler.jsonc`:
 - `AUTH_JWT_AUDIENCE`
 - `AUTH_SESSION_TTL_SECONDS`
 - `AUTH_APPLE_NONCE_TTL_SECONDS`
+
+Production analytics vars in `wrangler.jsonc`:
+
+- `ANALYTICS_ACCOUNT_ID`
+- `SCAN_ANALYTICS_DATASET`
+
+`SCAN_ANALYTICS` writes scan events from `/v1/scan`. The admin dashboard reads live scan totals,
+outcomes, source mix, vertical mix, top GTINs, and 7-day trend through the Cloudflare Analytics
+Engine SQL API when `ANALYTICS_API_TOKEN` is present. If the secret is missing or the SQL API is
+unavailable, `/v1/admin/metrics` still returns the D1 snapshot and marks live metrics unavailable.
+Use a token scoped to Account Analytics Read for account `75c2ecd9fee15d06f93013c411f31aaa`.
 
 Protected iOS endpoints accept only Optiyou-issued access tokens returned by `POST /v1/auth/apple`. Raw Apple identity tokens, anonymous install IDs, and static app bearer tokens are rejected.
 

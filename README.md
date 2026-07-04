@@ -12,7 +12,7 @@ npm run dev
 
 ## Platform
 
-Optiyou is now scaffolded as a Cloudflare-first product intelligence platform for U.S./Canada packaged food. The main Worker exposes `/v1/scan`, product lookup, scoring, contribution/upload, AI ask, methodology, StoreKit notification, and admin API surfaces. The storage split is D1 for structured truth, R2 for artifacts, KV for hot product cards and config, Queues for async ingestion, Analytics Engine for usage signals, Workers AI/AI Gateway for extraction and explanations, and Vectorize for the evidence graph.
+Optiyou is now scaffolded as a Cloudflare-first product intelligence platform for U.S./Canada packaged food. The main Worker exposes `/v1/scan`, product lookup, scoring, contribution/upload, AI ask, methodology, StoreKit notification, and admin API surfaces. The storage split is D1 for structured truth, optional R2 for artifacts, KV for hot product cards, config, and fallback contribution artifacts, Queues for async ingestion, Analytics Engine for usage signals, Workers AI/AI Gateway for extraction and explanations, and Vectorize for the evidence graph.
 
 Architecture details live in `docs/platform-architecture.md`. D1 migrations live in `migrations/`.
 

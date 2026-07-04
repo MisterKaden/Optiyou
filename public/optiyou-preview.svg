@@ -1,35 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 680" role="img" aria-labelledby="title desc">
-  <title id="title">Optiyou food scanner result</title>
-  <desc id="desc">A calm product scanner preview with OptiScore, OptiFit, confidence, warnings, and better swaps.</desc>
-  <rect width="960" height="680" fill="#f8faf7"/>
-  <rect x="46" y="42" width="868" height="596" rx="28" fill="#ffffff" stroke="#d9e2df" stroke-width="2"/>
-  <text x="92" y="104" fill="#18201f" font-family="Arial, sans-serif" font-size="38" font-weight="800">Optiyou</text>
-  <text x="92" y="139" fill="#0f766e" font-family="Arial, sans-serif" font-size="20" font-weight="700">Scan smarter. Choose better. Built around you.</text>
+  <title id="title">Optiyou scan result</title>
+  <desc id="desc">A composed product verdict with OptiScore, OptiFit, confidence, and a finer alternative.</desc>
+  <rect width="960" height="680" fill="#FCFCFA"/>
+  <rect x="46" y="42" width="868" height="596" rx="8" fill="#FFFFFF" stroke="#E7E4DA" stroke-width="1.5"/>
 
-  <rect x="92" y="184" width="318" height="384" rx="30" fill="#18201f"/>
-  <rect x="126" y="236" width="250" height="210" rx="18" fill="none" stroke="#f8faf7" stroke-width="6" stroke-dasharray="22 18"/>
-  <path d="M222 322h58v58h-58zM205 339v24M297 339v24M239 305h24M239 397h24" fill="none" stroke="#f8faf7" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="179" y="490" fill="#f8faf7" font-family="Arial, sans-serif" font-size="28" font-weight="800">Ready to scan</text>
+  <text x="92" y="106" fill="#101413" font-family="Georgia, 'Times New Roman', serif" font-size="40" font-weight="500" letter-spacing="10">OPTIYOU</text>
+  <rect x="92" y="124" width="56" height="2" fill="#A88A4F"/>
+  <text x="92" y="152" fill="#A88A4F" font-family="Avenir, 'Helvetica Neue', sans-serif" font-size="14" font-weight="600" letter-spacing="3.5">THE DISCERNING STANDARD</text>
 
-  <rect x="456" y="184" width="356" height="384" rx="22" fill="#f8faf7" stroke="#d9e2df"/>
-  <rect x="488" y="216" width="92" height="92" rx="14" fill="#e1f2ee" stroke="#d9e2df"/>
-  <path d="M516 274h42M516 256h42M524 238h26" fill="none" stroke="#0f766e" stroke-width="8" stroke-linecap="round"/>
-  <text x="602" y="246" fill="#18201f" font-family="Arial, sans-serif" font-size="31" font-weight="800">Cocoa Crunch</text>
-  <text x="602" y="280" fill="#61706c" font-family="Arial, sans-serif" font-size="20">Morning Bolt</text>
-  <rect x="602" y="296" width="132" height="34" rx="8" fill="#e1f2ee"/>
-  <text x="622" y="319" fill="#0b4f4a" font-family="Arial, sans-serif" font-size="16" font-weight="800">Good confidence</text>
+  <rect x="92" y="192" width="318" height="376" rx="8" fill="#101413"/>
+  <rect x="126" y="240" width="250" height="206" rx="10" fill="none" stroke="#CDBC8B" stroke-width="2" stroke-dasharray="20 16" opacity="0.9"/>
+  <path d="M222 322h58v58h-58zM205 339v24M297 339v24M239 305h24M239 397h24" fill="none" stroke="#FCFCFA" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="251" y="498" fill="#FCFCFA" font-family="Georgia, 'Times New Roman', serif" font-size="24" font-style="italic" text-anchor="middle">Ready when you are</text>
+  <text x="251" y="526" fill="#CDBC8B" font-family="Avenir, 'Helvetica Neue', sans-serif" font-size="12" font-weight="600" letter-spacing="3" text-anchor="middle">PLACE THE BARCODE</text>
 
-  <circle cx="552" cy="404" r="54" fill="#ffffff" stroke="#d9e2df" stroke-width="2"/>
-  <path d="M552 350a54 54 0 1 1-53 62" fill="none" stroke="#c33b41" stroke-width="10" stroke-linecap="round"/>
-  <text x="525" y="414" fill="#18201f" font-family="Arial, sans-serif" font-size="36" font-weight="900">46</text>
-  <text x="516" y="462" fill="#61706c" font-family="Arial, sans-serif" font-size="15" font-weight="700">OptiScore</text>
+  <rect x="456" y="192" width="356" height="376" rx="8" fill="#FFFFFF" stroke="#E7E4DA"/>
+  <rect x="488" y="226" width="88" height="88" rx="6" fill="#FCFCFA" stroke="#E7E4DA"/>
+  <path d="M514 282h42M514 264h42M522 246h26" fill="none" stroke="#1E5743" stroke-width="7" stroke-linecap="round"/>
+  <text x="598" y="256" fill="#101413" font-family="Georgia, 'Times New Roman', serif" font-size="29" font-weight="500">Cocoa Crunch</text>
+  <text x="598" y="284" fill="#6F746E" font-family="Avenir, 'Helvetica Neue', sans-serif" font-size="17">Morning Bolt</text>
+  <rect x="598" y="300" width="158" height="32" fill="none" stroke="#A88A4F"/>
+  <text x="612" y="321" fill="#8A6F3C" font-family="Avenir, 'Helvetica Neue', sans-serif" font-size="12" font-weight="600" letter-spacing="2">GOOD CONFIDENCE</text>
 
-  <circle cx="698" cy="404" r="54" fill="#ffffff" stroke="#d9e2df" stroke-width="2"/>
-  <path d="M698 350a54 54 0 0 1 1 0" fill="none" stroke="#c33b41" stroke-width="10" stroke-linecap="round"/>
-  <text x="687" y="414" fill="#18201f" font-family="Arial, sans-serif" font-size="36" font-weight="900">0</text>
-  <text x="672" y="462" fill="#61706c" font-family="Arial, sans-serif" font-size="15" font-weight="700">OptiFit</text>
+  <circle cx="552" cy="408" r="54" fill="#FFFFFF" stroke="#E7E4DA" stroke-width="1.5"/>
+  <path d="M552 354a54 54 0 1 1-53 62" fill="none" stroke="#B0563F" stroke-width="7" stroke-linecap="round"/>
+  <text x="552" y="420" fill="#101413" font-family="Georgia, 'Times New Roman', serif" font-size="38" font-weight="500" text-anchor="middle">46</text>
+  <text x="552" y="486" fill="#6F746E" font-family="Avenir, 'Helvetica Neue', sans-serif" font-size="12" font-weight="600" letter-spacing="2.5" text-anchor="middle">OPTISCORE</text>
 
-  <text x="488" y="506" fill="#c33b41" font-family="Arial, sans-serif" font-size="20" font-weight="800">Better option available.</text>
-  <rect x="488" y="530" width="292" height="1" fill="#d9e2df"/>
-  <text x="488" y="558" fill="#61706c" font-family="Arial, sans-serif" font-size="16">High added sugar and dye conflict.</text>
+  <circle cx="698" cy="408" r="54" fill="#FFFFFF" stroke="#E7E4DA" stroke-width="1.5"/>
+  <path d="M698 354a54 54 0 0 1 1 0" fill="none" stroke="#B0563F" stroke-width="7" stroke-linecap="round"/>
+  <text x="698" y="420" fill="#101413" font-family="Georgia, 'Times New Roman', serif" font-size="38" font-weight="500" text-anchor="middle">0</text>
+  <text x="698" y="486" fill="#6F746E" font-family="Avenir, 'Helvetica Neue', sans-serif" font-size="12" font-weight="600" letter-spacing="2.5" text-anchor="middle">OPTIFIT</text>
+
+  <rect x="488" y="508" width="292" height="1" fill="#E7E4DA"/>
+  <text x="488" y="540" fill="#101413" font-family="Georgia, 'Times New Roman', serif" font-size="21" font-style="italic">A finer choice exists.</text>
+  <text x="488" y="564" fill="#6F746E" font-family="Avenir, 'Helvetica Neue', sans-serif" font-size="14">High added sugar and a dye that conflicts with your profile.</text>
 </svg>

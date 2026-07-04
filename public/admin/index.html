@@ -4,6 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Optiyou Admin</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Jost:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/admin/admin.css" />
     <script src="/admin/admin.js" defer></script>
   </head>
@@ -31,6 +38,15 @@
             <button id="search" type="button">Search</button>
           </div>
           <div id="products"></div>
+        </section>
+
+        <section>
+          <h2>Waitlist</h2>
+          <div class="row">
+            <button id="refresh-waitlist" type="button">Load</button>
+            <button id="export-waitlist" class="secondary" type="button">Export CSV</button>
+          </div>
+          <div id="waitlist"></div>
         </section>
 
         <section>

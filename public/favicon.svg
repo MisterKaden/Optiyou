@@ -1,5 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Optiyou">
-  <rect width="64" height="64" rx="12" fill="#0f766e"/>
-  <path d="M17 34c5.6-12.4 14.6-18.3 27-17.9-2 15.4-10.7 26-26.2 31.8 1.8-6.7 5.4-12.6 10.9-17.7" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="64" height="64" rx="14" fill="#101413"/>
+  <circle cx="32" cy="32" r="13.5" fill="none" stroke="#FCFCFA" stroke-width="2.4"/>
+  <g transform="rotate(-24 32 32)">
+    <path d="M10.5 32a21.5 8.6 0 0 1 43 0" fill="none" stroke="#CDBC8B" stroke-width="1.7" stroke-linecap="round" opacity="0.5"/>
+    <path d="M53.5 32a21.5 8.6 0 0 1-43 0" fill="none" stroke="#CDBC8B" stroke-width="1.7" stroke-linecap="round"/>
+    <circle cx="53.5" cy="32" r="2.2" fill="#CDBC8B"/>
+  </g>
 </svg>
-

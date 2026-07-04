@@ -49,10 +49,11 @@
       "id": "83ead3db2c1c41fdb9cd2f1c272e47b8"
     }
   ],
-  "r2_buckets": [
+  // PRODUCT_ARTIFACTS is optional; signed uploads fall back to APP_CONFIG KV when R2 is not bound.
+  "analytics_engine_datasets": [
     {
-      "binding": "PRODUCT_ARTIFACTS",
-      "bucket_name": "optiyou-product-artifacts"
+      "binding": "SCAN_ANALYTICS",
+      "dataset": "optiyou_scan_analytics"
     }
   ],
   "queues": {
@@ -108,6 +109,8 @@
     "AUTH_APPLE_NONCE_TTL_SECONDS": "600",
     "UPLOAD_TOKEN_TTL_SECONDS": "900",
     "METHODOLOGY_VERSION": "food-us-ca-v1",
+    "ANALYTICS_ACCOUNT_ID": "75c2ecd9fee15d06f93013c411f31aaa",
+    "SCAN_ANALYTICS_DATASET": "optiyou_scan_analytics",
     "ADMIN_EMAILS": "kaden@winten.ai",
     "AI_GATEWAY_BASE_URL": "https://gateway.ai.cloudflare.com/v1"
   }

@@ -15,8 +15,8 @@ Optiyou is a product intelligence platform for U.S./Canada packaged food. The iO
 ## Cloudflare Storage Map
 
 - D1: structured truth: users, profiles, subscriptions, products, versions, field sources, nutrition, ingredients, allergens, scores, history, contributions, reviews, alternatives, and audit log.
-- R2: product photos, label scans, raw payloads, OCR output, AI artifacts, and evidence documents.
-- KV: hot barcode cards, app config, methodology metadata, alternatives, and ingestion state.
+- R2: optional product photos, label scans, raw payloads, OCR output, AI artifacts, and evidence documents.
+- KV: hot barcode cards, app config, methodology metadata, alternatives, ingestion state, and bounded fallback contribution artifacts when R2 is not bound.
 - Queues: ingestion, OCR/extraction, scoring, AI explanations, and notifications.
 - Workflows: durable missing-product ingestion, rescoring, correction review, and alternatives refresh.
 - Workers AI: extraction, normalization, category classification, explanations, embeddings.
@@ -39,8 +39,8 @@ Optiyou is a product intelligence platform for U.S./Canada packaged food. The iO
 1. Worker API.
 2. D1 schema.
 3. Food scoring engine.
-4. R2 uploads.
-5. KV cache.
+4. Signed uploads with optional R2 storage.
+5. KV cache and contribution fallback.
 6. Missing-product contribution.
 7. Queue-based AI extraction.
 8. Admin portal.

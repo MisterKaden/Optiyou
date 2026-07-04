@@ -2,8 +2,10 @@
 
 > The single source of truth for what Optiyou is, how it scores food, how its data and AI
 > pipelines work, and the order we build it in. Supersedes scattered decisions; cross-references
-> [platform-architecture.md](platform-architecture.md) (infra) and
-> [nutrition-evidence-gatekeeper.md](nutrition-evidence-gatekeeper.md) (the ATLAS agent spec).
+> [platform-architecture.md](platform-architecture.md) (infra),
+> [nutrition-evidence-gatekeeper.md](nutrition-evidence-gatekeeper.md) (the ATLAS agent spec), and
+> [health-layer-blueprint.md](health-layer-blueprint.md) (personal health data, PHI boundary,
+> compliance, OptiFit v2 biomarker personalization — approved 2026-06-10).
 >
 > Status: **approved direction, pre-implementation.** Last updated 2026-06-06.
 
